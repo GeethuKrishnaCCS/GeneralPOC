@@ -1,0 +1,27 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "rfq-review-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/rfqReview/RfqReviewWebPart.js",
+          "manifest": "./src/webparts/rfqReview/RfqReviewWebPart.manifest.json"
+        }
+      ]
+    },
+    "qatar-cement-dashboard-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/qatarCementDashboard/QatarCementDashboardWebPart.js",
+          "manifest": "./src/webparts/qatarCementDashboard/QatarCementDashboardWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "RfqReviewWebPartStrings": "lib/webparts/rfqReview/loc/{locale}.js",
+    "QatarCementDashboardWebPartStrings": "lib/webparts/qatarCementDashboard/loc/{locale}.js"
+  }
+}
