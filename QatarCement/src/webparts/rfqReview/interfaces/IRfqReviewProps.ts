@@ -13,5 +13,11 @@ export interface IRfqReviewState {
   modalOverlay: {
     isOpen: boolean;
     Text: string;
-  };
+  },
+  prNumber: string;
+  department: string;
+  priority: string;
+  dueDate: string;
+  prInitiator: string;
+  businessJustification: string;
 }
