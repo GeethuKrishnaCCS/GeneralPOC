@@ -33,7 +33,9 @@
       "properties": {
         "webpartTitle": "RFQ Review",
         "PRDetailsListName": "PRDetails",
-        "PRItemSpecficationsListName": "PRItemSpecfications"
+        "PRItemSpecficationsListName": "PRItemSpecfications",
+        "vendorListName": "Vendors",
+        "FlowConnectionsListName": "FlowConnectionsList"
       }
     }
   ]

@@ -1,10 +1,12 @@
 import * as React from 'react';
 import styles from './RfqReview.module.scss';
-import type { IRfqReviewProps, IRfqReviewState } from '../interfaces/IRfqReviewProps';
+import type { IItemData, IRfqReviewProps, IRfqReviewState } from '../interfaces/IRfqReviewProps';
 import { RfqReviewService } from '../services/RfqReviewService';
 import ModalOverlay from '../../../shared/controls/Overlay/Overlay';
-import { TextField } from '@fluentui/react';
-
+import { Dropdown, PrimaryButton, TextField, TooltipHost } from '@fluentui/react';
+import ToastService from '../../../shared/controls/Toast/Toast';
+import * as strings from 'RfqReviewWebPartStrings';
+import { HttpClient, IHttpClientOptions } from '@microsoft/sp-http';
 export default class RfqReview extends React.Component<IRfqReviewProps, IRfqReviewState, {}> {
   private service: RfqReviewService;
   constructor(props: IRfqReviewProps) {
@@ -19,17 +21,159 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       priority: '',
       dueDate: '',
       prInitiator: '',
-      businessJustification: ''
+      businessJustification: '',
+      itemDetails: [],
+      vendorOptions: [],
+      masterid: ''
     };
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
+    this.bindData = this.bindData.bind(this);
+    this.validateURLParams = this.validateURLParams.bind(this);
+    this.bindMasterData = this.bindMasterData.bind(this);
+    this.handleChange = this.handleChange.bind(this);
+    this.onsubmit = this.onsubmit.bind(this);
+    this.onCancel = this.onCancel.bind(this);
+    this.triggerSubmit = this.triggerSubmit.bind(this);
+
   }
   public async componentDidMount(): Promise<void> {
     this.setState({ modalOverlay: { isOpen: true, Text: 'Loading...' } });
     const user = await this.service.getCurrentUser();
     console.log(user);
-    this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+    await this.checkUserGroup();
+
+
+  }
+  public async checkUserGroup() {
+    const isInGroup = await this.service.isUserInGroup("RFQDept");
+    if (!isInGroup) {
+      ToastService.error("You do not have permission to access this form.");
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+    }
+    else {
+      /* Bind data */
+      await this.bindData();
+      /* Check queryparameter */
+      await this.validateURLParams();
+    }
+  }
+  public async bindData() {
+    // Bind Document Type
+    const vendorqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.vendorListName;
+    const getVendorchoice = await this.service.getPagedListItems(vendorqueryurl);
+    const VendorsName: { key: string, text: string }[] = [];
+    getVendorchoice.map((item: any) => {
+      VendorsName.push({ key: item.Title, text: item.Title });
+    });
+    this.setState({ vendorOptions: VendorsName });
+  }
+  //validate url parameters
+  public async validateURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    const masterid = params.get('MID');
+    if (masterid !== "" && masterid !== null && masterid !== undefined) {
+      await this.bindMasterData(masterid);
+    }
+    else {
+      ToastService.error("Invalid URL parameters. Please check and try again.");
+    }
+  }
+  public async bindMasterData(masterid: any) {
+    let masterdata: any;
+    let itemdetaildata: any[];
+    let itemdetaildataitems: any[] = [];
+    //Fetch master index item
+    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRDetailsListName;
+    const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
+    const expand = "PRInitiator";
+    // Fetch master item details
+    const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
+    const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'"; // Filter to get the specific DMS ID
+    try {
+      masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
+      console.log("masterdata" + masterdata);
+      itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
+      console.log("itemdetaildata" + itemdetaildata);
+      if (itemdetaildata.length > 0) {
+        itemdetaildata.forEach((item: any, index: any) => {
+          itemdetaildataitems.push({
+            index: index + 1,
+            Id: item.Id,
+            Description: item.Description,
+            ItemCode: item.ItemCode,
+            Quantity: item.Qty,
+            UOM: item.UoM,
+            Title: item.Title,
+            vendors: item.Vendors
+          });
+        });
+
+      }
+      this.setState({
+        masterid: masterid,
+        prNumber: masterdata.PRNumber,
+        department: masterdata.Department,
+        priority: masterdata.Priority,
+        dueDate: masterdata.DueDate,
+        prInitiator: masterdata.PRInitiator.Title,
+        businessJustification: masterdata.BusinessJustification,
+        modalOverlay: { isOpen: false, Text: '' },
+        itemDetails: itemdetaildataitems
+      });
+
+    } catch (error) {
+      console.error("Error fetching DMS data:", error);
+      ToastService.error("Failed to fetch data. Please try again later.");
+    }
+  }
+  // Handle change for vendor table data
+  public handleChange = (index: number, field: keyof IItemData, value: string): void => {
+    const vendorData = [...this.state.itemDetails];
+
+    vendorData[index][field] = value;
+
+    this.setState({ itemDetails: vendorData });
+  };
+  //on submit
+  public onsubmit = async (): Promise<void> => {
+    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting...' } });
+    await this.triggerSubmit();
+  };
+  // Trigger IndexCreation 
+  public async triggerSubmit() {
+    const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+    const flowName = "QatarCement_RFQSubmit"
+    const filter = "Title eq '" + flowName + "'";
+    const laUrl = await this.service.getItemsFilter(queryurl, filter);
+    const postURL = laUrl[0].AppURL;
+    const requestHeaders: Headers = new Headers();
+    requestHeaders.append("Content-type", "application/json");
+    const body: string = JSON.stringify({
+      'MasterID': String(this.state.masterid),
+      'ItemDetails': this.state.itemDetails
+
+
+    });
+    const postOptions: IHttpClientOptions = {
+      headers: requestHeaders,
+      body: body
+    };
+    const response = await this.props.context.httpClient.post(postURL, HttpClient.configurations.v1, postOptions);
+    if (response) {
+      const responseJSON = await response.json();
+      if (response.ok) {
+        console.log("Response from Flow:", responseJSON);
+        ToastService.success("RFQ Submitted successfully.");
+        this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+      }
+    }
+  }
+  //on cancel
+  public onCancel = (): void => {
+    window.close();
   }
   public render(): React.ReactElement<IRfqReviewProps> {
+
     // Common styles for TextField
     const textFieldStyles = {
       field: {
@@ -69,10 +213,67 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
             </div>
             <div className={styles.row}>
               <div className={styles.col12}>
-                <h3 >Supporting Documents</h3>
+                <h3 >Item Details</h3>
               </div>
             </div>
+            <div className={styles.row}>
+              <div className={styles.col12}>
+                {this.state.itemDetails.length > 0 &&
+                  <div className={styles.doctable}>
+                    <table className={styles.table} >
+                      <tr className={styles.tr}>
+                        <th className={styles.th}>Sl No</th>
+                        <th className={styles.th}>ItemCode</th>
+                        <th className={styles.th}>Description</th>
+                        <th className={styles.th}>Quantity</th>
+                        <th className={styles.th}>UOM</th>
+                        <th className={styles.th}>Vendors</th>
+                      </tr>
+                      {this.state.itemDetails.map((item, key) => {
+                        return (
+                          <tr key={key} className={styles.tr}>
+                            <td className={styles.th}>{key + 1}</td>
+                            <td className={styles.th}><TextField value={item.ItemCode} readOnly /></td>
+                            <td className={styles.th}><TooltipHost content={item.Description}><TextField value={item.Description} readOnly /></TooltipHost></td>
+                            <td className={styles.th}><TextField value={item.Quantity} readOnly /></td>
+                            <td className={styles.th}><TextField value={item.UOM} readOnly /></td>
+                            <td className={styles.th}>
+                              <div className={styles.vendorCell}>
+                                <Dropdown
+                                  placeholder="Select Vendors"
+                                  multiSelect
+                                  options={this.state.vendorOptions}
+                                  selectedKeys={item.vendors ? item.vendors.split(',') : []}
+                                  onChange={(e, option) => {
+                                    let updated = [...(item.vendors ? item.vendors.split(',') : [])];
 
+                                    if (option?.selected) {
+                                      updated.push(option.key as string);
+                                    } else {
+                                      updated = updated.filter(v => v !== option?.key);
+                                    }
+
+                                    this.handleChange(key, 'vendors', updated.join(','));
+                                  }}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </table>
+                  </div>
+                }
+              </div>
+            </div>
+            <div className={styles.row}>
+              <div className={styles.col12}>
+                <div className={styles.rgtalign}>
+                  <PrimaryButton className={styles.btn} onClick={this.onsubmit}>Submit</PrimaryButton >
+                  <PrimaryButton className={styles.btn} onClick={this.onCancel}>Close</PrimaryButton >
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <ModalOverlay

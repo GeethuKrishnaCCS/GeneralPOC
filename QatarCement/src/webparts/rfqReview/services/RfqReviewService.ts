@@ -13,5 +13,14 @@ export class RfqReviewService extends BaseService {
   public getCurrentUser() {
     return this.spfi.web.currentUser();
   }
+  public async isUserInGroup(groupName: string): Promise<boolean> {
+    try {
+      const groups = await this.spfi.web.currentUser.groups();
 
+      return groups.some(g => g.Title.toLowerCase() === groupName.toLowerCase());
+    } catch (error) {
+      console.error("Error checking group membership:", error);
+      return false;
+    }
+  }
 }

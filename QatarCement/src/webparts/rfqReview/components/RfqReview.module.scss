@@ -52,3 +52,90 @@
 .col12 {
   flex: 1 1 0%;
 }
+
+.doctable {
+  width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  /* Ensures borders don't overlap */
+}
+
+.tr {
+  border: 1px solid #ccc;
+  /* Adds border between rows */
+}
+
+.th {
+  border: 1px solid #ccc;
+  /* Adds border between columns */
+  padding: 8px;
+  /* Adds padding for better readability */
+  text-align: left;
+  /* Aligns text to the left */
+  overflow: hidden;
+}
+
+/* Fixed width for columns */
+/* Sl No */
+.table tr th:nth-child(1),
+.table tr td:nth-child(1) {
+  max-width: 3em;
+  width: 3em;
+}
+
+/* Item Code */
+.table tr th:nth-child(2),
+.table tr td:nth-child(2) {
+  width: 10em
+}
+
+/* Description */
+.table tr th:nth-child(3),
+.table tr td:nth-child(3) {
+  width: 20em;
+}
+
+
+
+/* Quantity */
+.table tr th:nth-child(4),
+.table tr td:nth-child(4) {
+  width: 5em;
+}
+
+/* UOM */
+.table tr th:nth-child(5),
+.table tr td:nth-child(5) {
+  width: 8em;
+}
+
+/* Vendors column → max width + wrap */
+.table tr th:nth-child(6),
+.table tr td:nth-child(6) {
+  width: calc(30% - 10px);
+  max-width: 250px;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.vendorCell {
+  // max-width: 220px;
+  width: 100%;
+}
+
+.rgtalign {
+  margin-top: 5px;
+  width: 100%;
+  text-align: right;
+}
+
+.btn {
+  margin-right: 5px;
+  border-radius: 5px;
+  border: 1px solid gray;
+  margin-bottom: 5px;
+}

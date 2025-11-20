@@ -111,6 +111,12 @@ export default class RfqReviewWebPart extends BaseClientSideWebPart<IRfqReviewWe
                 }),
                 PropertyPaneTextField('PRItemSpecficationsListName', {
                   label: "PR Item Specifications List Name",
+                }),
+                PropertyPaneTextField('vendorListName', {
+                  label: "Vendor List Name",
+                }),
+                PropertyPaneTextField('FlowConnectionsListName', {
+                  label: "Flow Connections List Name",
                 })
               ]
             }
