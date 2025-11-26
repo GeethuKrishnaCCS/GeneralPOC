@@ -80,6 +80,13 @@ export class BaseService {
             .expand(expand)
             .filter(filter)()
     }
+
+    public getItemsByIdSelectExpand(queryurl: string, id: any, select: string, expand: string): Promise<any> {
+        return this.sp.web.getList(queryurl).items
+            .getById(id)
+            .select(select)
+            .expand(expand)()
+    }
     public async getPagedItemsSelectExpand(queryurl: string, select: string, expand: string): Promise<any> {
         let collection: any = []
         for await (const items of this.sp.web.getList(queryurl).items.select(select).expand(expand).top(250) as any) {
@@ -101,12 +108,7 @@ export class BaseService {
         }
         return collection
     }
-    public getItemsByIdSelectExpand(queryurl: string, id: any, select: string, expand: string): Promise<any> {
-        return this.sp.web.getList(queryurl).items
-            .getById(id)
-            .select(select)
-            .expand(expand)()
-    }
+    
     public createNewItem(url: string, data: any): Promise<any> {
         return this.sp.web.getList(url).items.add(data);
     }
