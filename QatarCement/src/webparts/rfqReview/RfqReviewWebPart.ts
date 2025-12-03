@@ -117,6 +117,9 @@ export default class RfqReviewWebPart extends BaseClientSideWebPart<IRfqReviewWe
                 }),
                 PropertyPaneTextField('FlowConnectionsListName', {
                   label: "Flow Connections List Name",
+                }),
+                PropertyPaneTextField('WorkflowTasksListName', {
+                  label: "Workflow Task List Name",
                 })
               ]
             }

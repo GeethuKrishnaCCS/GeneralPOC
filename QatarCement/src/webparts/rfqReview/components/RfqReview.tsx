@@ -3,10 +3,13 @@ import styles from './RfqReview.module.scss';
 import type { IItemData, IRfqReviewProps, IRfqReviewState } from '../interfaces/IRfqReviewProps';
 import { RfqReviewService } from '../services/RfqReviewService';
 import ModalOverlay from '../../../shared/controls/Overlay/Overlay';
-import { Dropdown, PrimaryButton, TextField, TooltipHost } from '@fluentui/react';
+import { PrimaryButton, TextField } from '@fluentui/react';
 import ToastService from '../../../shared/controls/Toast/Toast';
 import * as strings from 'RfqReviewWebPartStrings';
 import { HttpClient, IHttpClientOptions } from '@microsoft/sp-http';
+import * as moment from 'moment';
+import RFQDeptDetailsTable from './RFQDeptDetailsTable';
+import VendorDetailsTable from './VendorDetailsTable';
 export default class RfqReview extends React.Component<IRfqReviewProps, IRfqReviewState, {}> {
   private service: RfqReviewService;
   constructor(props: IRfqReviewProps) {
@@ -16,6 +19,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         isOpen: false,
         Text: ''
       },
+      currentUser: { id: '', email: '', title: '' },
+      userType: '',
       prNumber: '',
       department: '',
       priority: '',
@@ -27,8 +32,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       masterid: ''
     };
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
-    this.bindData = this.bindData.bind(this);
     this.validateURLParams = this.validateURLParams.bind(this);
+    this.bindVendorData = this.bindVendorData.bind(this);
+    this.bindWorkflowData = this.bindWorkflowData.bind(this);
+    this.checkUserGroup = this.checkUserGroup.bind(this);
     this.bindMasterData = this.bindMasterData.bind(this);
     this.handleChange = this.handleChange.bind(this);
     this.onsubmit = this.onsubmit.bind(this);
@@ -37,14 +44,65 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
   }
   public async componentDidMount(): Promise<void> {
-    this.setState({ modalOverlay: { isOpen: true, Text: 'Loading...' } });
     const user = await this.service.getCurrentUser();
-    console.log(user);
-    await this.checkUserGroup();
-
+    this.setState({
+      modalOverlay: { isOpen: true, Text: 'Loading...' },
+      currentUser: { id: user.Id, email: user.Email, title: user.Title }
+    });
+    /* Check queryparameter */
+    await this.validateURLParams();
 
   }
-  public async checkUserGroup() {
+  //validate url parameters
+  public async validateURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    const masterid = params.get('MID');
+    const taskid = params.get('TID'); // NEW
+
+    if (masterid !== "" && masterid !== null && masterid !== undefined) {
+      if (taskid !== "" && taskid !== null && taskid !== undefined) {
+        // 👉 CASE 2: MID + TID
+        await this.bindWorkflowData(masterid, taskid);
+
+      } else {
+        // 👉 CASE 1: Only MID
+        await this.checkUserGroup(masterid);
+
+      }
+    } else {
+      ToastService.error("Invalid URL parameters. Please check and try again.");
+    }
+  }
+  // Check current user from workflow task data
+  public async bindWorkflowData(masterid: any, taskid: any) {
+    try {
+      const taskqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.WorkflowTasksListName;
+      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
+      const expand = "AssignedTo";
+      const workflowData = await this.service.getItemsByIdSelectExpand(taskqueryurl, Number(taskid), select, expand);
+      console.log("Workflow Data:", workflowData);
+      if (workflowData) {
+        if (workflowData.AssignedTo.EMail.toLowerCase() === this.state.currentUser.email.toLowerCase()) {
+          this.setState({ userType: "Vendors" })
+          // Process workflow data as needed
+          await this.bindMasterData(masterid);
+        }
+        else {
+          this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+          ToastService.error("You are not authorized to access this task.");
+          return;
+        }
+
+      } else {
+        ToastService.error("No workflow data found for the provided Task ID and Master ID.");
+      }
+    } catch (error) {
+      console.error("Error fetching workflow data:", error);
+      ToastService.error("Failed to fetch workflow data. Please try again later.");
+    }
+  }
+  // Check user in RFQDept group
+  public async checkUserGroup(masterid: any) {
     const isInGroup = await this.service.isUserInGroup("RFQDept");
     if (!isInGroup) {
       ToastService.error("You do not have permission to access this form.");
@@ -52,12 +110,14 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     }
     else {
       /* Bind data */
-      await this.bindData();
-      /* Check queryparameter */
-      await this.validateURLParams();
+      await this.bindVendorData();
+      /*  Bind Master Data */
+      await this.bindMasterData(masterid);
+
     }
   }
-  public async bindData() {
+  // Bind Vendor Data
+  public async bindVendorData() {
     // Bind Document Type
     const vendorqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.vendorListName;
     const getVendorchoice = await this.service.getPagedListItems(vendorqueryurl);
@@ -65,192 +125,58 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     getVendorchoice.map((item: any) => {
       VendorsName.push({ key: item.Title, text: item.Title });
     });
-    this.setState({ vendorOptions: VendorsName });
+    this.setState({ vendorOptions: VendorsName, userType: "RFQDept" });
   }
 
-  private async getWorkflowTaskItems(masterid: number, currentUserEmail: string) {
-    const taskListUrl =
-      this.props.context.pageContext.web.serverRelativeUrl + "/Lists/WorkflowTasks";
-      // strings.queryList + "WorkflowTasks"; //
-      // this.props.wpproperties.WorkflowTasksListName; // ← ADD list name in WP properties
+  // Bind Master Data
+  public async bindMasterData(masterid: any) {
+    let masterdata: any;
+    let itemdetaildata: any[];
+    let itemdetaildataitems: any[] = [];
+    //Fetch master index item
+    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRDetailsListName;
+    const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
+    const expand = "PRInitiator";
+    // Fetch master item details
+    const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
+    const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'"; // Filter to get the specific DMS ID
+    try {
+      masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
+      console.log("masterdata" + masterdata);
+      itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
+      console.log("itemdetaildata" + itemdetaildata);
+      if (itemdetaildata.length > 0) {
+        itemdetaildata.forEach((item: any, index: any) => {
+          itemdetaildataitems.push({
+            index: index + 1,
+            Id: item.Id,
+            Description: item.Description,
+            ItemCode: item.ItemCode,
+            Quantity: item.Qty,
+            UOM: item.UoM,
+            Title: item.Title,
+            vendors: item.Vendors
+          });
+        });
 
-    const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
-    const expand = "AssignedTo";
-
-    // Filter by MID only → We will filter by user later
-    const filter = `PRDetailID eq '${masterid}'`;
-
-    const tasks = await this.service.getItemsSelectExpandFilter(
-      taskListUrl,
-      select,
-      expand,
-      filter
-    );
-
-    // Filter items by Logged-in user
-    const filtered = tasks.filter((t: any) =>
-      t.AssignedTo?.EMail?.toLowerCase() === currentUserEmail.toLowerCase()
-    );
-
-    // Convert to item table structure
-    return filtered.map((t: any, index: number) => ({
-      index: index + 1,
-      Id: t.PRItemID?.Id,
-      Description: t.PRItemID?.Description,
-      ItemCode: t.PRItemID?.ItemCode,
-      Quantity: t.PRItemID?.Qty,
-      UOM: t.PRItemID?.UoM,
-      Title: t.Title,
-      vendors: t.Vendors ?? ""
-    }));
-  }
-
-  //validate url parameters
-  // public async validateURLParams() {
-  //   const params = new URLSearchParams(window.location.search);
-  //   const masterid = params.get('MID');
-  //   if (masterid !== "" && masterid !== null && masterid !== undefined) {
-  //     await this.bindMasterData(masterid);
-  //   }
-  //   else {
-  //     ToastService.error("Invalid URL parameters. Please check and try again.");
-  //   }
-  // }
-
-  public async validateURLParams() {
-    const params = new URLSearchParams(window.location.search);
-    const masterid = params.get('MID');
-    const taskid = params.get('TID'); // NEW
-
-    if (masterid) {
-      if (taskid) {
-        // 👉 CASE 2: MID + TID
-        await this.bindMasterData(masterid, true); // 'true' = only PR details
-      } else {
-        // 👉 CASE 1: Only MID
-        await this.bindMasterData(masterid, false); // 'false' = load item details
       }
-    } else {
-      ToastService.error("Invalid URL parameters. Please check and try again.");
+      this.setState({
+        masterid: masterid,
+        prNumber: masterdata.PRNumber,
+        department: masterdata.Department,
+        priority: masterdata.Priority,
+        dueDate: masterdata.DueDate,
+        prInitiator: masterdata.PRInitiator.Title,
+        businessJustification: masterdata.BusinessJustification,
+        modalOverlay: { isOpen: false, Text: '' },
+        itemDetails: itemdetaildataitems
+      });
+
+    } catch (error) {
+      console.error("Error fetching DMS data:", error);
+      ToastService.error("Failed to fetch data. Please try again later.");
     }
   }
- public async bindMasterData(masterid: any, loadFromWorkflowTasks: boolean = false) {
-  let masterdata: any;
-  let itemdetaildataitems: any[] = [];
-
-  const masterqueryurl =
-    this.props.context.pageContext.web.serverRelativeUrl +
-    strings.queryList +
-    this.props.wpproperties.PRDetailsListName;
-
-  const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
-  const expand = "PRInitiator";
-
-  try {
-    // Fetch master PR header
-    masterdata = await this.service.getItemsByIdSelectExpand(
-      masterqueryurl,
-      Number(masterid),
-      select,
-      expand
-    );
-
-    // Get current user email
-    let currentUser = await this.service.getCurrentUser();
-    let currentEmail = currentUser.Email;
-
-    if (loadFromWorkflowTasks) {
-      // 👉 CASE: MID + TID → fetch workflow tasks
-      itemdetaildataitems = await this.getWorkflowTaskItems(Number(masterid), currentEmail);
-    } else {
-      // 👉 CASE: Only MID → fetch PR item specifications
-      const itemdetailqueryurl =
-        this.props.context.pageContext.web.serverRelativeUrl +
-        strings.queryList +
-        this.props.wpproperties.PRItemSpecficationsListName;
-
-      const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'";
-      const itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
-
-      itemdetaildataitems = itemdetaildata.map((item: any, index: number) => ({
-        index: index + 1,
-        Id: item.Id,
-        Description: item.Description,
-        ItemCode: item.ItemCode,
-        Quantity: item.Qty,
-        UOM: item.UoM,
-        Title: item.Title,
-        vendors: item.Vendors
-      }));
-    }
-
-    this.setState({
-      masterid: masterid,
-      prNumber: masterdata.PRNumber,
-      department: masterdata.Department,
-      priority: masterdata.Priority,
-      dueDate: masterdata.DueDate,
-      prInitiator: masterdata.PRInitiator.Title,
-      businessJustification: masterdata.BusinessJustification,
-      itemDetails: itemdetaildataitems,
-      modalOverlay: { isOpen: false, Text: "" }
-    });
-  } catch (error) {
-    console.error("Error fetching DMS data:", error);
-    ToastService.error("Failed to fetch data. Please try again later.");
-  }
-}
-
-
-
-  // public async bindMasterData(masterid: any) {
-  //   let masterdata: any;
-  //   let itemdetaildata: any[];
-  //   let itemdetaildataitems: any[] = [];
-  //   //Fetch master index item
-  //   const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRDetailsListName;
-  //   const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
-  //   const expand = "PRInitiator";
-  //   // Fetch master item details
-  //   const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
-  //   const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'"; // Filter to get the specific DMS ID
-  //   try {
-  //     masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
-  //     console.log("masterdata" + masterdata);
-  //     itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
-  //     console.log("itemdetaildata" + itemdetaildata);
-  //     if (itemdetaildata.length > 0) {
-  //       itemdetaildata.forEach((item: any, index: any) => {
-  //         itemdetaildataitems.push({
-  //           index: index + 1,
-  //           Id: item.Id,
-  //           Description: item.Description,
-  //           ItemCode: item.ItemCode,
-  //           Quantity: item.Qty,
-  //           UOM: item.UoM,
-  //           Title: item.Title,
-  //           vendors: item.Vendors
-  //         });
-  //       });
-
-  //     }
-  //     this.setState({
-  //       masterid: masterid,
-  //       prNumber: masterdata.PRNumber,
-  //       department: masterdata.Department,
-  //       priority: masterdata.Priority,
-  //       dueDate: masterdata.DueDate,
-  //       prInitiator: masterdata.PRInitiator.Title,
-  //       businessJustification: masterdata.BusinessJustification,
-  //       modalOverlay: { isOpen: false, Text: '' },
-  //       itemDetails: itemdetaildataitems
-  //     });
-
-  //   } catch (error) {
-  //     console.error("Error fetching DMS data:", error);
-  //     ToastService.error("Failed to fetch data. Please try again later.");
-  //   }
-  // }
   // Handle change for vendor table data
   public handleChange = (index: number, field: keyof IItemData, value: string): void => {
     const vendorData = [...this.state.itemDetails];
@@ -325,7 +251,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 <TextField label="Priority" value={this.state.priority} readOnly styles={textFieldStyles} />
               </div>
               <div className={styles.col4}>
-                <TextField label="Due Date" value={this.state.dueDate} readOnly styles={textFieldStyles} />
+                <TextField label="Due Date" value={moment(this.state.dueDate).format(strings.DateFormat)} readOnly styles={textFieldStyles} />
               </div>
               <div className={styles.col4}>
                 <TextField label="PR Initiator" value={this.state.prInitiator} readOnly styles={textFieldStyles} />
@@ -341,7 +267,16 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 <h3 >Item Details</h3>
               </div>
             </div>
-            <div className={styles.row}>
+            {/* Inside the render method, replace the table code with this: */}
+            {this.state.userType === "RFQDept" && <RFQDeptDetailsTable
+              itemDetails={this.state.itemDetails}
+              vendorOptions={this.state.vendorOptions}
+              handleChange={this.handleChange}
+            />}
+            <VendorDetailsTable
+              itemDetails={this.state.itemDetails}
+            />
+            {/* <div className={styles.row}>
               <div className={styles.col12}>
                 {this.state.itemDetails.length > 0 &&
                   <div className={styles.doctable}>
@@ -390,7 +325,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                   </div>
                 }
               </div>
-            </div>
+            </div> */}
             <div className={styles.row}>
               <div className={styles.col12}>
                 <div className={styles.rgtalign}>
@@ -401,6 +336,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
             </div>
           </div>
         </div>
+        {ToastService.container()}
         <ModalOverlay
           isModalOpen={this.state.modalOverlay.isOpen}
           modalText={this.state.modalOverlay.Text}

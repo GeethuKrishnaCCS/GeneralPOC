@@ -12,6 +12,7 @@ declare interface IRfqReviewWebPartStrings {
   AppOutlookEnvironment: string;
   UnknownEnvironment: string;
   queryList: string;
+  DateFormat: string;
 }
 
 declare module 'RfqReviewWebPartStrings' {

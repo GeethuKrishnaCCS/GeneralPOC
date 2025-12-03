@@ -11,12 +11,15 @@ export interface IRfqReviewWebPartProps {
   PRItemSpecficationsListName: string;
   vendorListName: string;
   FlowConnectionsListName: string;
+  workflowTaskListName: string;
 }
 export interface IRfqReviewState {
   modalOverlay: {
     isOpen: boolean;
     Text: string;
   },
+  currentUser: IUser;
+  userType: string;
   prNumber: string;
   department: string;
   priority: string;
@@ -35,4 +38,9 @@ export interface IItemData {
   UOM: string;
   Title: string;
   vendors: string;
+}
+export interface IUser {
+  id: any;
+  email: string;
+  title: string;
 }

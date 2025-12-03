@@ -35,7 +35,8 @@
         "PRDetailsListName": "PRDetails",
         "PRItemSpecficationsListName": "PRItemSpecfications",
         "vendorListName": "Vendors",
-        "FlowConnectionsListName": "FlowConnectionsList"
+        "FlowConnectionsListName": "FlowConnectionsList",
+        "WorkflowTasksListName": "WorkflowTasks"
       }
     }
   ]
