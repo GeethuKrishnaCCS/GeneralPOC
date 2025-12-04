@@ -273,9 +273,9 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
               vendorOptions={this.state.vendorOptions}
               handleChange={this.handleChange}
             />}
-            <VendorDetailsTable
+            {this.state.userType === "Vendor" && <VendorDetailsTable
               itemDetails={this.state.itemDetails}
-            />
+            />}
             {/* <div className={styles.row}>
               <div className={styles.col12}>
                 {this.state.itemDetails.length > 0 &&
