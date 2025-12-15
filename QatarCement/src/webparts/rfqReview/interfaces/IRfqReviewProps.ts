@@ -17,7 +17,7 @@ export interface IRfqReviewWebPartProps {
 export interface IVendorResponse {
   status?: string;
   price?: string;
-  comments?: string;
+  comments?: string; 
 }
 
 export interface IRfqReviewState {
