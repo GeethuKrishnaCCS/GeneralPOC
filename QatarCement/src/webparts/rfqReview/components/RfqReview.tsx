@@ -3,7 +3,7 @@ import styles from './RfqReview.module.scss';
 import type { IItemData, IRfqReviewProps, IRfqReviewState } from '../interfaces/IRfqReviewProps';
 import { RfqReviewService } from '../services/RfqReviewService';
 import ModalOverlay from '../../../shared/controls/Overlay/Overlay';
-import { PrimaryButton, TextField } from '@fluentui/react';
+import { TextField } from '@fluentui/react';
 import ToastService from '../../../shared/controls/Toast/Toast';
 import * as strings from 'RfqReviewWebPartStrings';
 import { HttpClient, IHttpClientOptions } from '@microsoft/sp-http';
@@ -29,7 +29,9 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       businessJustification: '',
       itemDetails: [],
       vendorOptions: [],
-      masterid: ''
+      masterid: '',
+      taskID: null,
+      vendorResponses: {} as Record<number, { status?: string; price?: string; comments?: string }>
     };
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
     this.validateURLParams = this.validateURLParams.bind(this);
@@ -38,9 +40,14 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.checkUserGroup = this.checkUserGroup.bind(this);
     this.bindMasterData = this.bindMasterData.bind(this);
     this.handleChange = this.handleChange.bind(this);
-    this.onsubmit = this.onsubmit.bind(this);
-    this.onCancel = this.onCancel.bind(this);
+    // this.onsubmit = this.onsubmit.bind(this);
+    // this.onCancel = this.onCancel.bind(this);
     this.triggerSubmit = this.triggerSubmit.bind(this);
+    this.submitRFQDept = this.submitRFQDept.bind(this);
+    this.handleVendorResponseChange = this.handleVendorResponseChange.bind(this);
+    this.submitVendor = this.submitVendor.bind(this);
+    this.triggerVendorSubmit = this.triggerVendorSubmit.bind(this);
+    this.closeWindow = this.closeWindow.bind(this);
 
   }
   public async componentDidMount(): Promise<void> {
@@ -61,6 +68,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     if (masterid !== "" && masterid !== null && masterid !== undefined) {
       if (taskid !== "" && taskid !== null && taskid !== undefined) {
+        this.setState({ taskID: taskid });
         // 👉 CASE 2: MID + TID
         await this.bindWorkflowData(masterid, taskid);
 
@@ -83,7 +91,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       console.log("Workflow Data:", workflowData);
       if (workflowData) {
         if (workflowData.AssignedTo.EMail.toLowerCase() === this.state.currentUser.email.toLowerCase()) {
-          this.setState({ userType: "Vendors" })
+          this.setState({ userType: "Vendor" })
           // Process workflow data as needed
           await this.bindMasterData(masterid);
         }
@@ -179,18 +187,18 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
   }
   // Handle change for vendor table data
   public handleChange = (index: number, field: keyof IItemData, value: string): void => {
-    const vendorData = [...this.state.itemDetails];
+  const vendorData = [...this.state.itemDetails];
 
-    vendorData[index][field] = value;
+  (vendorData[index][field] as any) = value;
 
-    this.setState({ itemDetails: vendorData });
-  };
+  this.setState({ itemDetails: vendorData });
+};
   //on submit
-  public onsubmit = async (): Promise<void> => {
-    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting...' } });
-    await this.triggerSubmit();
-  };
-  // Trigger IndexCreation 
+  // public onsubmit = async (): Promise<void> => {
+  //   this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting...' } });
+  //   await this.triggerSubmit();
+  // };
+  // // Trigger IndexCreation 
   public async triggerSubmit() {
     const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
     const flowName = "QatarCement_RFQSubmit"
@@ -219,10 +227,136 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       }
     }
   }
-  //on cancel
-  public onCancel = (): void => {
-    window.close();
+  // //on cancel
+  // public onCancel = (): void => {
+  //   window.close();
+  // }
+
+  public submitRFQDept = async () => {
+    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting RFQ Dept Data...' } });
+
+    await this.triggerSubmit();   // use your existing flow submit logic
+
+    this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+  };
+
+  public handleVendorResponseChange = (itemId: number, field: 'status' | 'comments', value: string): void => {
+    this.setState(prevState => ({
+      vendorResponses: {
+        ...prevState.vendorResponses,
+        [itemId]: {
+          status: prevState.vendorResponses[itemId]?.status || '',
+          comments: prevState.vendorResponses[itemId]?.comments || '',
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  public submitVendor = async () => {
+    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting Vendor Response...' } });
+
+    // call a NEW vendor-specific flow
+    await this.triggerVendorSubmit();
+
+    this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+  };
+
+  // public async triggerVendorSubmit() {
+  //   const vendorFlow = "QatarCement_RFQVendorSubmit";
+
+  //   const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+  //   const filter = `Title eq '${vendorFlow}'`;
+
+  //   const laUrl = await this.service.getItemsFilter(queryurl, filter);
+  //   const postURL = laUrl[0].AppURL;
+
+  //   const headers = new Headers();
+  //   headers.append("Content-type", "application/json");
+
+  //   const body: string = JSON.stringify({
+  //     'MasterID': String(this.state.masterid),
+  //     'ItemDetails': this.state.itemDetails,
+  //     'TaskID': this.state.taskID
+
+
+  //   });
+
+  //   const response = await this.props.context.httpClient.post(
+  //     postURL,
+  //     HttpClient.configurations.v1,
+  //     { headers, body }
+  //   );
+
+  //   const json = await response.json();
+  //   console.log("Vendor Response:", json);
+
+  //   if (response.ok) {
+  //     ToastService.success("Vendor response submitted!");
+  //   }
+  // }
+  // Update triggerVendorSubmit to include vendor responses
+
+  public async triggerVendorSubmit() {
+    const vendorFlow = "QatarCement_RFQVendorSubmit";
+
+    const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+    const filter = `Title eq '${vendorFlow}'`;
+
+    const laUrl = await this.service.getItemsFilter(queryurl, filter);
+    const postURL = laUrl[0].AppURL;
+
+    const headers = new Headers();
+    headers.append("Content-type", "application/json");
+
+    // ✓ Filter items assigned to current vendor
+    const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
+
+    const vendorAssignedItems = this.state.itemDetails.filter(item => {
+      if (!item.vendors) return false;
+      const vendorList = item.vendors.toLowerCase();
+      const emails = vendorList.split(/[,;]/).map(e => e.trim());
+      return emails.some(email => email === userEmailLower || email.includes(userEmailLower));
+    });
+
+    // ✓ Add vendor responses to only the filtered items
+    const itemDetailsWithResponses = vendorAssignedItems.map((item) => ({
+      ...item,
+      vendorStatus: this.state.vendorResponses[item.Id]?.status || '', // Add default
+      vendorPrice: this.state.vendorResponses[item.Id]?.price || '', // Add default
+      vendorComments: this.state.vendorResponses[item.Id]?.comments || '', // Add default
+    }));
+
+    const body: string = JSON.stringify({
+      'TaskID': String(this.state.taskID),
+      'VendorEmail': this.state.currentUser.email, // ✓ Include vendor email for tracking
+      'MasterID': String(this.state.masterid),
+      'ItemDetails': itemDetailsWithResponses, // ✓ Now only includes vendor's assigned items
+      
+    });
+
+    console.log("Submitting Vendor Data:", itemDetailsWithResponses); // ✓ Add logging for debugging
+
+    const response = await this.props.context.httpClient.post(
+      postURL,
+      HttpClient.configurations.v1,
+      { headers, body }
+    );
+
+    const json = await response.json();
+    console.log("Vendor Response:", json);
+
+    if (response.ok) {
+      ToastService.success("Vendor response submitted!");
+    } else {
+      ToastService.error("Failed to submit vendor response. Please try again.");
+    }
   }
+
+  public closeWindow = () => {
+    window.close();
+  };
+
   public render(): React.ReactElement<IRfqReviewProps> {
 
     // Common styles for TextField
@@ -268,72 +402,26 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
               </div>
             </div>
             {/* Inside the render method, replace the table code with this: */}
-            {this.state.userType === "RFQDept" && <RFQDeptDetailsTable
-              itemDetails={this.state.itemDetails}
-              vendorOptions={this.state.vendorOptions}
-              handleChange={this.handleChange}
-            />}
-            {this.state.userType === "Vendor" && <VendorDetailsTable
-              itemDetails={this.state.itemDetails}
-            />}
-            {/* <div className={styles.row}>
-              <div className={styles.col12}>
-                {this.state.itemDetails.length > 0 &&
-                  <div className={styles.doctable}>
-                    <table className={styles.table} >
-                      <tr className={styles.tr}>
-                        <th className={styles.th}>Sl No</th>
-                        <th className={styles.th}>ItemCode</th>
-                        <th className={styles.th}>Description</th>
-                        <th className={styles.th}>Quantity</th>
-                        <th className={styles.th}>UOM</th>
-                        <th className={styles.th}>Vendors</th>
-                      </tr>
-                      {this.state.itemDetails.map((item, key) => {
-                        return (
-                          <tr key={key} className={styles.tr}>
-                            <td className={styles.th}>{key + 1}</td>
-                            <td className={styles.th}><TextField value={item.ItemCode} readOnly /></td>
-                            <td className={styles.th}><TooltipHost content={item.Description}><TextField value={item.Description} readOnly /></TooltipHost></td>
-                            <td className={styles.th}><TextField value={item.Quantity} readOnly /></td>
-                            <td className={styles.th}><TextField value={item.UOM} readOnly /></td>
-                            <td className={styles.th}>
-                              <div className={styles.vendorCell}>
-                                <Dropdown
-                                  placeholder="Select Vendors"
-                                  multiSelect
-                                  options={this.state.vendorOptions}
-                                  selectedKeys={item.vendors ? item.vendors.split(',') : []}
-                                  onChange={(e, option) => {
-                                    let updated = [...(item.vendors ? item.vendors.split(',') : [])];
+            {this.state.userType === "RFQDept" && <>
+              <RFQDeptDetailsTable
+                itemDetails={this.state.itemDetails}
+                vendorOptions={this.state.vendorOptions}
+                handleChange={this.handleChange}
+                onSubmitRFQDept={this.submitRFQDept}
+                onCancel={this.closeWindow}
+              />
+            </>}
+            {this.state.userType === "Vendor" && (
+              <>
 
-                                    if (option?.selected) {
-                                      updated.push(option.key as string);
-                                    } else {
-                                      updated = updated.filter(v => v !== option?.key);
-                                    }
+                <VendorDetailsTable itemDetails={this.state.itemDetails}
+                  currentUserEmail={this.state.currentUser.email}
+                  onSubmitVendor={this.submitVendor}
+                  onCancel={this.closeWindow}
 
-                                    this.handleChange(key, 'vendors', updated.join(','));
-                                  }}
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </table>
-                  </div>
-                }
-              </div>
-            </div> */}
-            <div className={styles.row}>
-              <div className={styles.col12}>
-                <div className={styles.rgtalign}>
-                  <PrimaryButton className={styles.btn} onClick={this.onsubmit}>Submit</PrimaryButton >
-                  <PrimaryButton className={styles.btn} onClick={this.onCancel}>Close</PrimaryButton >
-                </div>
-              </div>
-            </div>
+                  onResponseChange={this.handleVendorResponseChange} vendorResponses={this.state.vendorResponses} />
+              </>
+            )}
           </div>
         </div>
         {ToastService.container()}

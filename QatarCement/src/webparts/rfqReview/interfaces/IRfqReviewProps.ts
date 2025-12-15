@@ -13,6 +13,13 @@ export interface IRfqReviewWebPartProps {
   FlowConnectionsListName: string;
   workflowTaskListName: string;
 }
+
+export interface IVendorResponse {
+  status?: string;
+  price?: string;
+  comments?: string;
+}
+
 export interface IRfqReviewState {
   modalOverlay: {
     isOpen: boolean;
@@ -29,9 +36,15 @@ export interface IRfqReviewState {
   itemDetails: IItemData[]
   vendorOptions: IDropdownOption[];
   masterid: string;
+  taskID: any;
+  vendorResponses: Record<number, IVendorResponse>;
+
 }
+
+
 export interface IItemData {
   index: string;
+  Id: number;
   Description: string;
   ItemCode: string;
   Quantity: string;
