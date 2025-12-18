@@ -51,6 +51,7 @@ export interface IItemData {
   UOM: string;
   Title: string;
   vendors: string;
+  WorkflowDetailsId: number;
 }
 export interface IUser {
   id: any;

@@ -40,8 +40,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.checkUserGroup = this.checkUserGroup.bind(this);
     this.bindMasterData = this.bindMasterData.bind(this);
     this.handleChange = this.handleChange.bind(this);
-    // this.onsubmit = this.onsubmit.bind(this);
-    // this.onCancel = this.onCancel.bind(this);
     this.triggerSubmit = this.triggerSubmit.bind(this);
     this.submitRFQDept = this.submitRFQDept.bind(this);
     this.handleVendorResponseChange = this.handleVendorResponseChange.bind(this);
@@ -69,6 +67,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     if (masterid !== "" && masterid !== null && masterid !== undefined) {
       if (taskid !== "" && taskid !== null && taskid !== undefined) {
         this.setState({ taskID: taskid });
+        this.setState({ masterid: masterid });
         // 👉 CASE 2: MID + TID
         await this.bindWorkflowData(masterid, taskid);
 
@@ -137,22 +136,106 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
   }
 
   // Bind Master Data
+  // public async bindMasterData(masterid: any) {
+  //   let masterdata: any;
+  //   let itemdetaildata: any[];
+  //   let itemdetaildataitems: any[] = [];
+  //   //Fetch master index item
+  //   const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRDetailsListName;
+  //   const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
+  //   const expand = "PRInitiator";
+  //   // Fetch master item details
+  //   const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
+  //   const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'"; // Filter to get the specific DMS ID
+  //   try {
+  //     masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
+  //     console.log("masterdata" + masterdata);
+  //     itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
+  //     console.log("itemdetaildata" + itemdetaildata);
+  //     if (itemdetaildata.length > 0) {
+  //       itemdetaildata.forEach((item: any, index: any) => {
+  //         itemdetaildataitems.push({
+  //           index: index + 1,
+  //           Id: item.Id,
+  //           Description: item.Description,
+  //           ItemCode: item.ItemCode,
+  //           Quantity: item.Qty,
+  //           UOM: item.UoM,
+  //           Title: item.Title,
+  //           vendors: item.Vendors
+  //         });
+  //       });
+
+  //     }
+  //     this.setState({
+  //       masterid: masterid,
+  //       prNumber: masterdata.PRNumber,
+  //       department: masterdata.Department,
+  //       priority: masterdata.Priority,
+  //       dueDate: masterdata.DueDate,
+  //       prInitiator: masterdata.PRInitiator.Title,
+  //       businessJustification: masterdata.BusinessJustification,
+  //       modalOverlay: { isOpen: false, Text: '' },
+  //       itemDetails: itemdetaildataitems
+  //     });
+
+  //   } catch (error) {
+  //     console.error("Error fetching DMS data:", error);
+  //     ToastService.error("Failed to fetch data. Please try again later.");
+  //   }
+  // }
+
+  // Replace the bindMasterData method in RfqReview.tsx with this updated version:
+
   public async bindMasterData(masterid: any) {
     let masterdata: any;
     let itemdetaildata: any[];
     let itemdetaildataitems: any[] = [];
-    //Fetch master index item
+
+    // Fetch master index item
     const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRDetailsListName;
     const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
     const expand = "PRInitiator";
+
     // Fetch master item details
     const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
-    const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'"; // Filter to get the specific DMS ID
+    const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'";
+
     try {
       masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
-      console.log("masterdata" + masterdata);
+      console.log("masterdata", masterdata);
+
       itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
-      console.log("itemdetaildata" + itemdetaildata);
+      console.log("itemdetaildata", itemdetaildata);
+
+      // ✓ Fetch WorkflowDetails only for Vendor
+      let workflowDetailsMap: Record<string, number> = {};
+
+      if (this.state.userType === "Vendor" && this.state.taskID) {
+
+        const workflowDetailsQuery =
+          this.props.context.pageContext.web.serverRelativeUrl +
+          strings.queryList +
+          "WorkflowDetails";
+
+        const workflowFilter =
+          `PRDetailID eq '${this.state.masterid}' and ` +
+          `TaskID eq '${this.state.taskID}' and ` +
+          `Vendor eq '${this.state.currentUser.email}'`;
+
+        const workflowDetailsData =
+          await this.service.getPagedFilterListItems(workflowDetailsQuery, workflowFilter);
+
+        console.log("workflowDetailsData", workflowDetailsData);
+
+        // 🔑 Map PRItemID (text) → WorkflowDetails ID
+        workflowDetailsData.forEach((wfItem: any) => {
+          if (wfItem.PRItemID) {
+            workflowDetailsMap[String(wfItem.PRItemID)] = wfItem.Id;
+          }
+        });
+      }
+
       if (itemdetaildata.length > 0) {
         itemdetaildata.forEach((item: any, index: any) => {
           itemdetaildataitems.push({
@@ -163,11 +246,14 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
             Quantity: item.Qty,
             UOM: item.UoM,
             Title: item.Title,
-            vendors: item.Vendors
+            vendors: item.Vendors,
+
+            // ✅ THIS IS THE KEY LINE
+            WorkflowDetailsId: workflowDetailsMap[String(item.Id)] || null
           });
         });
-
       }
+
       this.setState({
         masterid: masterid,
         prNumber: masterdata.PRNumber,
@@ -181,23 +267,21 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       });
 
     } catch (error) {
-      console.error("Error fetching DMS data:", error);
+      console.error("Error fetching data:", error);
       ToastService.error("Failed to fetch data. Please try again later.");
     }
   }
+
+
   // Handle change for vendor table data
   public handleChange = (index: number, field: keyof IItemData, value: string): void => {
-  const vendorData = [...this.state.itemDetails];
+    const vendorData = [...this.state.itemDetails];
 
-  (vendorData[index][field] as any) = value;
+    (vendorData[index][field] as any) = value;
 
-  this.setState({ itemDetails: vendorData });
-};
-  //on submit
-  // public onsubmit = async (): Promise<void> => {
-  //   this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting...' } });
-  //   await this.triggerSubmit();
-  // };
+    this.setState({ itemDetails: vendorData });
+  };
+
   // // Trigger IndexCreation 
   public async triggerSubmit() {
     const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
@@ -227,10 +311,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       }
     }
   }
-  // //on cancel
-  // public onCancel = (): void => {
-  //   window.close();
-  // }
+
 
   public submitRFQDept = async () => {
     this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting RFQ Dept Data...' } });
@@ -240,13 +321,16 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ modalOverlay: { isOpen: false, Text: '' } });
   };
 
-  public handleVendorResponseChange = (itemId: number, field: 'status' | 'comments', value: string): void => {
+
+
+  public handleVendorResponseChange = (itemId: number, field: 'status' | 'price' | 'comments', value: string): void => {
     this.setState(prevState => ({
       vendorResponses: {
         ...prevState.vendorResponses,
         [itemId]: {
-          status: prevState.vendorResponses[itemId]?.status || '',
-          comments: prevState.vendorResponses[itemId]?.comments || '',
+          // Preserve all existing fields for this itemId
+          ...(prevState.vendorResponses[itemId] || {}),
+          // Only update the specific field being changed
           [field]: value
         }
       }
@@ -262,6 +346,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ modalOverlay: { isOpen: false, Text: '' } });
   };
 
+
+  // Update triggerVendorSubmit to include vendor responses
   // public async triggerVendorSubmit() {
   //   const vendorFlow = "QatarCement_RFQVendorSubmit";
 
@@ -274,13 +360,33 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
   //   const headers = new Headers();
   //   headers.append("Content-type", "application/json");
 
-  //   const body: string = JSON.stringify({
-  //     'MasterID': String(this.state.masterid),
-  //     'ItemDetails': this.state.itemDetails,
-  //     'TaskID': this.state.taskID
+  //   // ✓ Filter items assigned to current vendor
+  //   const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
 
+  //   const vendorAssignedItems = this.state.itemDetails.filter(item => {
+  //     if (!item.vendors) return false;
+  //     const vendorList = item.vendors.toLowerCase();
+  //     const emails = vendorList.split(/[,;]/).map(e => e.trim());
+  //     return emails.some(email => email === userEmailLower || email.includes(userEmailLower));
+  //   });
+
+  //   // ✓ Add vendor responses to only the filtered items
+  //   const itemDetailsWithResponses = vendorAssignedItems.map((item) => ({
+  //     ...item,
+  //     vendorStatus: this.state.vendorResponses[item.Id]?.status || '', // Add default
+  //     vendorPrice: this.state.vendorResponses[item.Id]?.price || '', // Add default
+  //     vendorComments: this.state.vendorResponses[item.Id]?.comments || '', // Add default
+  //   }));
+
+  //   const body: string = JSON.stringify({
+  //     'TaskID': String(this.state.taskID),
+  //     'VendorEmail': this.state.currentUser.email, // ✓ Include vendor email for tracking
+  //     'MasterID': String(this.state.masterid),
+  //     'ItemDetails': itemDetailsWithResponses, // ✓ Now only includes vendor's assigned items
 
   //   });
+
+  //   console.log("Submitting Vendor Data:", itemDetailsWithResponses); // ✓ Add logging for debugging
 
   //   const response = await this.props.context.httpClient.post(
   //     postURL,
@@ -293,14 +399,18 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
   //   if (response.ok) {
   //     ToastService.success("Vendor response submitted!");
+  //   } else {
+  //     ToastService.error("Failed to submit vendor response. Please try again.");
   //   }
   // }
-  // Update triggerVendorSubmit to include vendor responses
+
+  // Replace triggerVendorSubmit method in RfqReview.tsx with this:
 
   public async triggerVendorSubmit() {
     const vendorFlow = "QatarCement_RFQVendorSubmit";
 
-    const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+    const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.FlowConnectionsListName;
     const filter = `Title eq '${vendorFlow}'`;
 
     const laUrl = await this.service.getItemsFilter(queryurl, filter);
@@ -309,7 +419,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     const headers = new Headers();
     headers.append("Content-type", "application/json");
 
-    // ✓ Filter items assigned to current vendor
+    // Filter items assigned to current vendor
     const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
 
     const vendorAssignedItems = this.state.itemDetails.filter(item => {
@@ -319,23 +429,23 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       return emails.some(email => email === userEmailLower || email.includes(userEmailLower));
     });
 
-    // ✓ Add vendor responses to only the filtered items
+    // Add vendor responses + WorkflowDetailsId to filtered items
     const itemDetailsWithResponses = vendorAssignedItems.map((item) => ({
       ...item,
-      vendorStatus: this.state.vendorResponses[item.Id]?.status || '', // Add default
-      vendorPrice: this.state.vendorResponses[item.Id]?.price || '', // Add default
-      vendorComments: this.state.vendorResponses[item.Id]?.comments || '', // Add default
+      WorkflowDetailsId: item.WorkflowDetailsId, // ✓ Include WorkflowDetailsId
+      vendorStatus: this.state.vendorResponses[item.Id]?.status || '',
+      vendorPrice: this.state.vendorResponses[item.Id]?.price || '',
+      vendorComments: this.state.vendorResponses[item.Id]?.comments || '',
     }));
 
     const body: string = JSON.stringify({
       'TaskID': String(this.state.taskID),
-      'VendorEmail': this.state.currentUser.email, // ✓ Include vendor email for tracking
+      'VendorEmail': this.state.currentUser.email,
       'MasterID': String(this.state.masterid),
-      'ItemDetails': itemDetailsWithResponses, // ✓ Now only includes vendor's assigned items
-      
+      'ItemDetails': itemDetailsWithResponses, // ✓ Now includes WorkflowDetailsId
     });
 
-    console.log("Submitting Vendor Data:", itemDetailsWithResponses); // ✓ Add logging for debugging
+    console.log("Submitting Vendor Data:", itemDetailsWithResponses);
 
     const response = await this.props.context.httpClient.post(
       postURL,
