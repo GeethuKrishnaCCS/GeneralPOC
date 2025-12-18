@@ -438,7 +438,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       vendorComments: this.state.vendorResponses[item.Id]?.comments || '',
     }));
 
-    const body: string = JSON.stringify({
+    const body: string = JSON.stringify({ 
       'TaskID': String(this.state.taskID),
       'VendorEmail': this.state.currentUser.email,
       'MasterID': String(this.state.masterid),
