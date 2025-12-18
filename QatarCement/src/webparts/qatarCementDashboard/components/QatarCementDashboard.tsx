@@ -60,7 +60,8 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
   private async getPRDetailsAndItems(): Promise<void> {
     // list names are expected from web part properties, fallback to defaults
     const prDetailsListName = this.props.wpproperties?.PRDetailsListName || 'PRDetails';
-    const prItemsListName = this.props.wpproperties?.PRItemSpecficationsListName || 'PRItemSpecifications';
+    //const prItemsListName = this.props.wpproperties?.PRItemSpecficationsListName || 'PRItemSpecifications';
+    const prItemsListName = this.props.wpproperties?.WorkflowDetailsListName || 'WorkflowDetails';
 
     const webUrl: string = this.props.context.pageContext.web.serverRelativeUrl || this.props.context.pageContext.web.absoluteUrl;
     const prDetailsQuery = `${webUrl}/Lists/${prDetailsListName}`;
@@ -72,38 +73,39 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
     const prDetails: any[] = await this.service.getSelectExpand(prDetailsQuery, prDetailsSelect, prDetailsExpand) || [];
 
     // fetch PR Item Specifications and include PRDetails lookup; Vendors is a plain text field
-    const prItemsSelect = "ID,Title,ItemCode,Description,Qty,UoM,PRDetailsID/ID,PRDetailsID/PRNumber,Created,Modified,Vendors";
-    const prItemsExpand = "PRDetailsID";
+    //const prItemsSelect = "ID,Title,ItemCode,Description,Qty,UoM,PRDetailsID/ID,PRDetailsID/PRNumber,Created,Modified,Vendors";
+    //const prItemsExpand = "PRDetailsID";
+
+    const prItemsSelect =
+      "ID,Title,Vendor,PRDetailID,PRItemID,TaskID,Status,Comments,Price,VendorDescription,ItemCode,Description,Qty,UoM,Created,Modified";
+
+    const prItemsExpand = ""; // WorkflowDetails has NO lookup fields to expand
+
+
     const prItemsRaw: any[] = await this.service.getSelectExpand(prItemsQuery, prItemsSelect, prItemsExpand) || [];
 
-    // normalize PR item children
     const prItems: any[] = prItemsRaw.map((it: any) => {
-      const lookup = it.PRDetailsID || it.PRDetails || null;
-      const prDetailsId = lookup ? (lookup.ID || lookup.Id || lookup.Id || lookup.ID) : null;
-      // normalize Vendors (could be array or single object)
-      let vendors = '';
-      const v = it.Vendors || null;
-      if (Array.isArray(v)) {
-        vendors = v.map((vv: any) => vv.Title || vv.EMail || vv.Email || '').filter((x: string) => x).join(', ');
-      } else if (v && typeof v === 'object') {
-        vendors = v.Title || v.EMail || v.Email || '';
-      } else if (typeof it.Vendors === 'string') {
-        vendors = it.Vendors;
-      }
-
       return {
         ID: it.ID,
         Title: it.Title,
+        Vendor: it.Vendor,
+        PRDetailID: it.PRDetailID,
+        PRItemID: it.PRItemID,
+        TaskID: it.TaskID,
+        Status: it.Status,
+        Comments: it.Comments,
+        Price: it.Price,
+        VendorDescription: it.VendorDescription,
         ItemCode: it.ItemCode,
         Description: it.Description,
         Qty: it.Qty,
         UoM: it.UoM,
-        prDetailsId: prDetailsId,
-        Vendors: vendors,
+        prDetailsId: it.PRDetailID,  // 🔥 THIS CONNECTS CHILD TO PARENT
         Created: it.Created ? this.formatDate(it.Created) : '',
         Modified: it.Modified ? this.formatDate(it.Modified) : ''
       };
     });
+
 
     // Build combined list: for each PRDetail create a parent row then its child rows
     const combinedItems: any[] = [];
@@ -122,26 +124,58 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
         Created: pd.Created ? this.formatDate(pd.Created) : '',
         Modified: pd.Modified ? this.formatDate(pd.Modified) : ''
       };
-      // children
-      const children = prItems.filter(pi => String(pi.prDetailsId) === String(pd.ID));
-      combinedItems.push(parent);
-      for (const c of children) {
-        combinedItems.push({ ...c, isParent: false });
-      }
-      const count = 1 + children.length;
-      // default groups collapsed so sub items are hidden until user clicks the toggle
-      groups.push({ key: String(pd.ID), name: pd.PRNumber || `PR ${pd.ID}`, startIndex: cumulativeCount, count: count, level: 0, isCollapsed: true });
-      cumulativeCount += count;
-    }
 
+      // children for this PR
+      const children = prItems.filter(pi => String(pi.prDetailsId) === String(pd.ID));
+
+      // PR top-level group (level 0) — includes parent + all its children
+      const prGroupCount = 1 + children.length;
+      groups.push({
+        key: `pr-${pd.ID}`,
+        name: `${pd.PRNumber || `PR ${pd.ID}`} (${children.length})`,
+        startIndex: cumulativeCount,
+        count: prGroupCount,
+        level: 0,
+        isCollapsed: true
+      });
+
+      // push parent row
+      combinedItems.push(parent);
+      cumulativeCount += 1;
+
+      // group children by Vendor (normalize empty -> 'Unknown')
+      const vendorGroups = _.groupBy(children, (c: any) => {
+        const v = (c.Vendor || c.Vendors || '').toString().trim();
+        return v.length ? v : 'Unknown Vendor';
+      });
+
+      // for each vendor group add a level-1 group and push the child rows
+      for (const vendorName of Object.keys(vendorGroups)) {
+        const vendorItems = vendorGroups[vendorName];
+        const vendorKey = `pr-${pd.ID}-vendor-${encodeURIComponent(vendorName)}`;
+        groups.push({
+          key: vendorKey,
+          name: vendorName,
+          startIndex: cumulativeCount,
+          count: vendorItems.length,
+          level: 1,
+          isCollapsed: true
+        });
+
+        for (const ci of vendorItems) {
+          combinedItems.push({ ...ci, isParent: false });
+          cumulativeCount += 1;
+        }
+      }
+    }
+    // ...existing code...
     this.setState({ listItems: combinedItems, groups: groups, itemsPerPage: 10 });
   }
 
   private getPRDetailsColumns(): IColumn[] {
     return [
-      { key: 'prnumber', name: 'PRNumber', fieldName: 'PRNumber', minWidth: 100, maxWidth: 120, isResizable: true },
-      { key: 'department', name: 'Department', fieldName: 'Department', minWidth: 100, maxWidth: 120, isResizable: true },
-      {
+      { key: 'title', name: 'Title', fieldName: 'Title', minWidth: 100, maxWidth: 120, isResizable: true },
+      /*{
         key: 'priority', name: 'Priority', fieldName: 'Priority', minWidth: 80, maxWidth: 100, isResizable: true,
         onRender: (item: any) => {
           const value = (item.Priority || '').toString();
@@ -156,26 +190,49 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
             </span>
           );
         }
-      },
-      { key: 'duedate', name: 'DueDate', fieldName: 'DueDate', minWidth: 100, maxWidth: 120, isResizable: true },
-      { key: 'prinitiator', name: 'PRInitiator', fieldName: 'PRInitiator', minWidth: 100, maxWidth: 120, isResizable: true },
-      { key: 'businessjustification', name: 'BusinessJustification', fieldName: 'BusinessJustification', minWidth: 150, maxWidth: 200, isResizable: true },
-      //{ key: 'created', name: 'Created', fieldName: 'Created', minWidth: 100, maxWidth: 120, isResizable: true },
-      //{ key: 'modified', name: 'Modified', fieldName: 'Modified', minWidth: 100, maxWidth: 120, isResizable: true },
-      //{ key: 'id', name: 'ID', fieldName: 'ID', minWidth: 40, maxWidth: 60, isResizable: true },
+      },*/
+      { key: 'itemCode', name: 'ItemCode', fieldName: 'ItemCode', minWidth: 100, maxWidth: 120, isResizable: true },
+      { key: 'description', name: 'Description', fieldName: 'Description', minWidth: 100, maxWidth: 120, isResizable: true },
+      { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 150, maxWidth: 200, isResizable: true },
+      { key: 'uoM', name: 'UoM', fieldName: 'UoM', minWidth: 100, maxWidth: 120, isResizable: true },
+      { key: 'comments', name: 'Comments', fieldName: 'Comments', minWidth: 100, maxWidth: 120, isResizable: true },
+      { key: 'price', name: 'Price', fieldName: 'Price', minWidth: 40, maxWidth: 60, isResizable: true },
+      { key: 'vendor', name: 'Vendor', fieldName: 'Vendor', minWidth: 100, maxWidth: 120, isResizable: true },
     ];
   }
 
+  /*private getPRItemSpecColumns(): IColumn[] {
+      return [
+        { key: 'itemcode', name: 'ItemCode', fieldName: 'ItemCode', minWidth: 80, maxWidth: 120, isResizable: true },
+        { key: 'description', name: 'Description', fieldName: 'Description', minWidth: 200, maxWidth: 300, isResizable: true },
+        { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 60, maxWidth: 80, isResizable: true },
+        { key: 'uom', name: 'UoM', fieldName: 'UoM', minWidth: 60, maxWidth: 80, isResizable: true },
+        //{ key: 'id', name: 'ID', fieldName: 'ID', minWidth: 40, maxWidth: 60, isResizable: true },
+        { key: 'vendors', name: 'Vendors', fieldName: 'Vendors', minWidth: 150, maxWidth: 300, isResizable: true },
+      ];
+    } */
+
   private getPRItemSpecColumns(): IColumn[] {
     return [
-      { key: 'itemcode', name: 'ItemCode', fieldName: 'ItemCode', minWidth: 80, maxWidth: 120, isResizable: true },
+      //{ key: 'pritemid', name: 'PRItemID', fieldName: 'PRItemID', minWidth: 80, maxWidth: 100, isResizable: true },
+      { key: 'title', name: 'Title', fieldName: 'Title', minWidth: 80, maxWidth: 100, isResizable: true },
+      { key: 'itemcode', name: 'Item Code', fieldName: 'ItemCode', minWidth: 80, maxWidth: 120, isResizable: true },
       { key: 'description', name: 'Description', fieldName: 'Description', minWidth: 200, maxWidth: 300, isResizable: true },
       { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 60, maxWidth: 80, isResizable: true },
       { key: 'uom', name: 'UoM', fieldName: 'UoM', minWidth: 60, maxWidth: 80, isResizable: true },
-      //{ key: 'id', name: 'ID', fieldName: 'ID', minWidth: 40, maxWidth: 60, isResizable: true },
-      { key: 'vendors', name: 'Vendors', fieldName: 'Vendors', minWidth: 150, maxWidth: 300, isResizable: true },
+      { key: 'comments', name: 'Comments', fieldName: 'Comments', minWidth: 200, maxWidth: 350, isResizable: true },
+      { key: 'price', name: 'Price', fieldName: 'Price', minWidth: 80, maxWidth: 120, isResizable: true },
+      { key: 'vendor', name: 'Vendor', fieldName: 'Vendor', minWidth: 150, maxWidth: 200, isResizable: true },
+
+      //{ key: 'vendordesc', name: 'Vendor Description', fieldName: 'VendorDescription', minWidth: 150, maxWidth: 250, isResizable: true },
+
+
+      //{ key: 'status', name: 'Status', fieldName: 'Status', minWidth: 100, maxWidth: 150, isResizable: true },
     ];
   }
+
+
+
   public render(): React.ReactElement<IQatarCementDashboardProps> {
     return (
       <section className={styles.container}>
