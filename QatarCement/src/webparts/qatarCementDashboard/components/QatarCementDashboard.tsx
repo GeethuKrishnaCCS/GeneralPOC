@@ -84,6 +84,8 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
 
     const prItemsRaw: any[] = await this.service.getSelectExpand(prItemsQuery, prItemsSelect, prItemsExpand) || [];
 
+
+
     const prItems: any[] = prItemsRaw.map((it: any) => {
       return {
         ID: it.ID,
@@ -152,6 +154,14 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
       // for each vendor group add a level-1 group and push the child rows
       for (const vendorName of Object.keys(vendorGroups)) {
         const vendorItems = vendorGroups[vendorName];
+
+        // 🔥 FIND HIGHEST PRICE IN THIS VENDOR GROUP
+        const maxPrice = Math.max(
+          ...vendorItems
+            .map((v: any) => Number(v.Price))
+            .filter(p => !isNaN(p))
+        );
+
         const vendorKey = `pr-${pd.ID}-vendor-${encodeURIComponent(vendorName)}`;
         groups.push({
           key: vendorKey,
@@ -162,8 +172,13 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
           isCollapsed: true
         });
 
+        // 🔥 MARK HIGHEST PRICE ITEM
         for (const ci of vendorItems) {
-          combinedItems.push({ ...ci, isParent: false });
+          combinedItems.push({
+            ...ci,
+            isParent: false,
+            isHighestPrice: Number(ci.Price) === maxPrice
+          });
           cumulativeCount += 1;
         }
       }
@@ -174,23 +189,8 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
 
   private getPRDetailsColumns(): IColumn[] {
     return [
-      { key: 'title', name: 'Title', fieldName: 'Title', minWidth: 100, maxWidth: 120, isResizable: true },
-      /*{
-        key: 'priority', name: 'Priority', fieldName: 'Priority', minWidth: 80, maxWidth: 100, isResizable: true,
-        onRender: (item: any) => {
-          const value = (item.Priority || '').toString();
-          let bg = '#107c10';
-          let color = '#ffffff';
-          if (/high/i.test(value)) { bg = '#e81123'; color = '#ffffff'; }
-          else if (/medium/i.test(value)) { bg = '#ff8c00'; color = '#ffffff'; }
-          else if (/low/i.test(value)) { bg = '#107c10'; color = '#ffffff'; }
-          return (
-            <span style={{ background: bg, color: color, padding: '4px 10px', borderRadius: 12, fontSize: 12, display: 'inline-block' }}>
-              {value}
-            </span>
-          );
-        }
-      },*/
+      // { key: 'title', name: 'Title', fieldName: 'Title', minWidth: 100, maxWidth: 120, isResizable: true },
+
       { key: 'itemCode', name: 'ItemCode', fieldName: 'ItemCode', minWidth: 100, maxWidth: 120, isResizable: true },
       { key: 'description', name: 'Description', fieldName: 'Description', minWidth: 100, maxWidth: 120, isResizable: true },
       { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 150, maxWidth: 200, isResizable: true },
@@ -201,31 +201,42 @@ export default class QatarCementDashboard extends React.Component<IQatarCementDa
     ];
   }
 
-  /*private getPRItemSpecColumns(): IColumn[] {
-      return [
-        { key: 'itemcode', name: 'ItemCode', fieldName: 'ItemCode', minWidth: 80, maxWidth: 120, isResizable: true },
-        { key: 'description', name: 'Description', fieldName: 'Description', minWidth: 200, maxWidth: 300, isResizable: true },
-        { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 60, maxWidth: 80, isResizable: true },
-        { key: 'uom', name: 'UoM', fieldName: 'UoM', minWidth: 60, maxWidth: 80, isResizable: true },
-        //{ key: 'id', name: 'ID', fieldName: 'ID', minWidth: 40, maxWidth: 60, isResizable: true },
-        { key: 'vendors', name: 'Vendors', fieldName: 'Vendors', minWidth: 150, maxWidth: 300, isResizable: true },
-      ];
-    } */
 
   private getPRItemSpecColumns(): IColumn[] {
     return [
       //{ key: 'pritemid', name: 'PRItemID', fieldName: 'PRItemID', minWidth: 80, maxWidth: 100, isResizable: true },
-      { key: 'title', name: 'Title', fieldName: 'Title', minWidth: 80, maxWidth: 100, isResizable: true },
+      //{ key: 'taskid', name: 'TaskID', fieldName: 'TaskID', minWidth: 80, maxWidth: 100, isResizable: true },
       { key: 'itemcode', name: 'Item Code', fieldName: 'ItemCode', minWidth: 80, maxWidth: 120, isResizable: true },
       { key: 'description', name: 'Description', fieldName: 'Description', minWidth: 200, maxWidth: 300, isResizable: true },
       { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 60, maxWidth: 80, isResizable: true },
       { key: 'uom', name: 'UoM', fieldName: 'UoM', minWidth: 60, maxWidth: 80, isResizable: true },
       { key: 'comments', name: 'Comments', fieldName: 'Comments', minWidth: 200, maxWidth: 350, isResizable: true },
-      { key: 'price', name: 'Price', fieldName: 'Price', minWidth: 80, maxWidth: 120, isResizable: true },
-      { key: 'vendor', name: 'Vendor', fieldName: 'Vendor', minWidth: 150, maxWidth: 200, isResizable: true },
+      //{ key: 'price', name: 'Price', fieldName: 'Price', minWidth: 80, maxWidth: 120, isResizable: true },
+      {
+        key: 'price',
+        name: 'Price',
+        fieldName: 'Price',
+        minWidth: 80,
+        maxWidth: 120,
+        isResizable: true,
+        onRender: (item: any) => {
+          const isHighest = item.isHighestPrice;
+          return (
+            <span
+              style={{
+                color: isHighest ? '#107c10' : '#323130',
+                fontWeight: isHighest ? 700 : 400
+              }}
+            >
+              {item.Price}
+            </span>
+          );
+        }
+      },
+
 
       //{ key: 'vendordesc', name: 'Vendor Description', fieldName: 'VendorDescription', minWidth: 150, maxWidth: 250, isResizable: true },
-
+      { key: 'vendor', name: 'Vendor', fieldName: 'Vendor', minWidth: 150, maxWidth: 200, isResizable: true },
 
       //{ key: 'status', name: 'Status', fieldName: 'Status', minWidth: 100, maxWidth: 150, isResizable: true },
     ];
