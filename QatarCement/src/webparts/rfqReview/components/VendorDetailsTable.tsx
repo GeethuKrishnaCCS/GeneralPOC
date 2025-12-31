@@ -62,7 +62,7 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({ itemDetails, c
     const dropdownStatusOptions = [
         { key: 'Available', text: 'Available' },
         { key: 'Not Available', text: 'Not Available' },
-    ];
+    ]; 
 
     if (filteredItems.length === 0) {
         return (
