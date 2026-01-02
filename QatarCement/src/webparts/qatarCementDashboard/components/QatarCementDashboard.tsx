@@ -88,8 +88,9 @@ export default class QatarCementDashboard extends React.Component<
 
       if (!prItems.length) continue;
 
-      const vendorGroups = _.groupBy(prItems, (v: any) =>
-        (v.Vendor || 'Unknown Vendor').trim()
+      // Group by ItemCode instead of Vendor
+      const itemGroups = _.groupBy(prItems, (v: any) =>
+        (v.ItemCode || 'Unknown Item').trim()
       );
 
       groups.push({
@@ -101,8 +102,8 @@ export default class QatarCementDashboard extends React.Component<
         isCollapsed: true
       });
 
-      Object.keys(vendorGroups).forEach(vendor => {
-        const items = vendorGroups[vendor];
+      Object.keys(itemGroups).forEach(itemCode => {
+        const items = itemGroups[itemCode];
 
         // ✅ Sort by price (LOWEST first)
         const sortedItems = [...items].sort(
@@ -110,8 +111,8 @@ export default class QatarCementDashboard extends React.Component<
         );
 
         groups.push({
-          key: `pr-${pr.ID}-vendor-${vendor}`,
-          name: vendor,
+          key: `pr-${pr.ID}-item-${itemCode}`,
+          name: itemCode,
           startIndex,
           count: sortedItems.length,
           level: 1,
@@ -126,8 +127,8 @@ export default class QatarCementDashboard extends React.Component<
           startIndex++;
         });
       });
-    }
 
+    }
     this.setState({ listItems: combinedItems, groups });
   }
 
