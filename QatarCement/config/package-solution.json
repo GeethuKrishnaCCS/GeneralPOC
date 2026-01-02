@@ -3,7 +3,7 @@
   "solution": {
     "name": "qatar-cement-client-side-solution",
     "id": "835727c9-37aa-4b90-a558-306634261af2",
-    "version": "1.0.0.2",
+    "version": "1.0.0.4",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,  
