@@ -35,12 +35,14 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       vendorOptions: [],
       masterid: '',
       taskID: null,
-      // vendorResponses: {} as Record<number, { status?: string; price?: string; comments?: string }>,
-      // initiatorResponses: {} as Record<number, { status?: string; comments?: string }> // ⭐ ADD THIS
       vendorResponses: {} as Record<number, IVendorResponseInput>,
       initiatorResponses: {} as Record<number, IInitiatorResponse>,
       managerResponses: {} as Record<number, IManagerResponse>,
-      procurementManagerResponses: {} as Record<number, IProcurementManagerResponse>
+      procurementManagerResponses: {} as Record<number, IProcurementManagerResponse>,
+      selectedFiles: [],
+      uploadedFileUrls: [],
+      attachments: [],
+      isLoadingAttachments: false
     };
 
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
@@ -130,6 +132,27 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     }
   }
 
+  //  fetch attachments:
+  public async fetchAttachments(masterid: string) {
+    this.setState({ isLoadingAttachments: true });
+
+    try {
+      const libraryName = "Shared Documents"; // or use this.props.wpproperties.DocumentLibraryName
+      const attachments = await this.service.getAttachmentsByPRDetailID(libraryName, masterid);
+
+      console.log("Fetched attachments for PRDetailID:", masterid, attachments);
+
+      this.setState({
+        attachments: attachments,
+        isLoadingAttachments: false
+      });
+    } catch (error) {
+      console.error("Error fetching attachments:", error);
+      ToastService.error("Failed to load attachments.");
+      this.setState({ isLoadingAttachments: false });
+    }
+  }
+
 
   // Add this new method to handle Initiator case
   public async bindInitiatorData(masterid: any, taskid: any) {
@@ -166,42 +189,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       ToastService.error("Failed to fetch workflow data. Please try again later.");
     }
   }
-
-  // Bind Maintenance Manager Data
-  // public async bindManagerData(masterid: any, taskid: any) {
-  //   try {
-  //     const taskqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
-  //       strings.queryList + this.props.wpproperties.WorkflowTasksListName;
-  //     const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
-  //     const expand = "AssignedTo";
-
-  //     const workflowData = await this.service.getItemsByIdSelectExpand(
-  //       taskqueryurl,
-  //       Number(taskid),
-  //       select,
-  //       expand
-  //     );
-
-  //     console.log("Maintenance Manager Workflow Data:", workflowData);
-
-  //     if (workflowData) {
-  //       // Verify the current user is the Maintenance Manager
-  //       if (workflowData.AssignedTo.EMail.toLowerCase() === this.state.currentUser.email.toLowerCase()) {
-  //         this.setState({ userType: "MaintenanceManager" });
-  //         await this.bindMasterDataForManager(masterid);
-  //       } else {
-  //         this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
-  //         ToastService.error("You are not authorized to access this task as Maintenance Manager.");
-  //         return;
-  //       }
-  //     } else {
-  //       ToastService.error("No workflow data found for the provided Task ID.");
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching manager workflow data:", error);
-  //     ToastService.error("Failed to fetch workflow data. Please try again later.");
-  //   }
-  // }
 
   public async bindManagerData(masterid: string, taskid: string) {
     try {
@@ -264,6 +251,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       // Fetch WorkflowDetails where InitiatorStatus = 'Technically Accepted'
       const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
         strings.queryList + "WorkflowDetails";
+      // const workflowFilter = `PRDetailID eq ${masterid}`;
       const workflowFilter = `PRDetailID eq ${masterid} and InitiatorStatus eq 'Technically Accepted'`;
 
       const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
@@ -469,9 +457,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ vendorOptions: VendorsName, userType: "RFQDept" });
   }
 
-
-
-  // bindMasterData method in RfqReview.tsx with this updated version:
   public async bindMasterData(masterid: any) {
     let masterdata: any;
     let itemdetaildata: any[];
@@ -497,33 +482,44 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       let workflowDetailsMap: Record<string, number> = {};
 
       if (this.state.userType === "Vendor" && this.state.taskID) {
-
         const workflowDetailsQuery =
           this.props.context.pageContext.web.serverRelativeUrl +
           strings.queryList +
           "WorkflowDetails";
 
-        // Remove quotes from numeric fields
+        // 🔑 FIXED: Proper filter for WorkflowDetails
         const workflowFilter =
-          `PRDetailID eq ${this.state.masterid} and ` +
-          `TaskID eq ${this.state.taskID} and ` +
+          `PRDetailID eq '${this.state.masterid}' and ` +
+          `TaskID eq '${this.state.taskID}' and ` +
           `Vendor eq '${this.state.currentUser.email}'`;
+
+        console.log("WorkflowDetails Filter:", workflowFilter);
 
         const workflowDetailsData =
           await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
 
-        console.log("workflowDetailsData", workflowDetailsData);
+        console.log("workflowDetailsData fetched:", workflowDetailsData);
 
-        // 🔑 Map PRItemID (text) → WorkflowDetails ID
+        // 🔑 Map PRItemID → WorkflowDetails ID
         workflowDetailsData.forEach((wfItem: any) => {
           if (wfItem.PRItemID) {
-            workflowDetailsMap[String(wfItem.PRItemID)] = wfItem.Id;
+            // Convert both to string for consistent comparison
+            const prItemIdKey = String(wfItem.PRItemID).trim();
+            workflowDetailsMap[prItemIdKey] = wfItem.Id;
+            console.log(`Mapped PRItemID ${prItemIdKey} -> WorkflowDetailsId ${wfItem.Id}`);
           }
         });
+
+        console.log("WorkflowDetails Map:", workflowDetailsMap);
       }
 
       if (itemdetaildata.length > 0) {
         itemdetaildata.forEach((item: any, index: any) => {
+          const itemIdKey = String(item.Id).trim();
+          const workflowDetailsId = workflowDetailsMap[itemIdKey] || null;
+
+          console.log(`Item ${item.Id} (${item.ItemCode}) -> WorkflowDetailsId: ${workflowDetailsId}`);
+
           itemdetaildataitems.push({
             index: index + 1,
             Id: item.Id,
@@ -533,12 +529,12 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
             UOM: item.UoM,
             Title: item.Title,
             vendors: item.Vendors,
-
-            // ✅ THIS IS THE KEY LINE
-            WorkflowDetailsId: workflowDetailsMap[String(item.Id)] || null
+            WorkflowDetailsId: workflowDetailsId // ✅ THIS IS THE KEY LINE
           });
         });
       }
+
+      console.log("Final itemDetails with WorkflowDetailsId:", itemdetaildataitems);
 
       this.setState({
         masterid: masterid,
@@ -551,6 +547,11 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         modalOverlay: { isOpen: false, Text: '' },
         itemDetails: itemdetaildataitems
       });
+
+      // Fetch attachments for vendor view
+      if (this.state.userType === "Vendor") {
+        await this.fetchAttachments(masterid);
+      }
 
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -619,6 +620,72 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     }
   }
 
+  // Handle file selection - append new files to existing ones
+  public handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const files = event.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+
+      // Append new files to existing selected files
+      this.setState(prevState => ({
+        selectedFiles: [...prevState.selectedFiles, ...newFiles]
+      }));
+
+      // Reset the input value so the same file can be selected again if needed
+      event.target.value = '';
+    }
+  };
+
+  // Remove a selected file
+  public removeFile = (index: number): void => {
+    this.setState(prevState => ({
+      selectedFiles: prevState.selectedFiles.filter((_, i) => i !== index)
+    }));
+  };
+
+
+  // Upload files to SharePoint document library
+  public uploadFilesToSharePoint = async (): Promise<string[]> => {
+    const { selectedFiles, masterid } = this.state;
+    const uploadedUrls: string[] = [];
+
+    if (selectedFiles.length === 0) {
+      return uploadedUrls;
+    }
+
+    try {
+      // Construct the full server relative path for the document library
+      // const libraryPath = `${this.props.context.pageContext.web.serverRelativeUrl}/${this.props.wpproperties.DocumentLibraryName}`;
+      const libraryPath = `${this.props.context.pageContext.web.serverRelativeUrl}/Shared Documents`;
+
+      // Prepare metadata to set on uploaded files
+      const metadata = {
+        PRDetailID: masterid  // Set the PRDetailID column value
+      };
+
+      // Upload each file
+      for (const file of selectedFiles) {
+        const fileName = `${masterid}_${file.name}`;
+        const fileUrl = await this.service.uploadFile(
+          libraryPath,
+          fileName,
+          file,
+          metadata  // Pass metadata to set column values
+        );
+        uploadedUrls.push(fileUrl);
+      }
+
+      console.log("Files uploaded successfully:", uploadedUrls);
+      ToastService.success(`${selectedFiles.length} file(s) uploaded successfully`);
+
+      return uploadedUrls;
+    } catch (error) {
+      console.error("Error uploading files:", error);
+      ToastService.error("Failed to upload files. Please try again.");
+      throw error;
+    }
+  };
+
   public handleChange = (index: number, field: keyof IItemData, value: string): void => {
     const vendorData = [...this.state.itemDetails];
 
@@ -627,26 +694,35 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ itemDetails: vendorData });
   };
 
-  // // Trigger IndexCreation 
-  public async triggerSubmit() {
-    const queryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.FlowConnectionsListName;
-    const flowName = "QatarCement_RFQSubmit"
+  // Update triggerSubmit to accept file URLs
+  public async triggerSubmit(fileUrls: string[] = []) {
+    const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+    const flowName = "QatarCement_RFQSubmit";
     const filter = "Title eq '" + flowName + "'";
     const laUrl = await this.service.getItemsFilter(queryurl, filter);
     const postURL = laUrl[0].AppURL;
+
     const requestHeaders: Headers = new Headers();
     requestHeaders.append("Content-type", "application/json");
+
     const body: string = JSON.stringify({
       'MasterID': String(this.state.masterid),
-      'ItemDetails': this.state.itemDetails
-
-
+      'ItemDetails': this.state.itemDetails,
+      'AttachmentUrls': fileUrls // Include file URLs
     });
+
     const postOptions: IHttpClientOptions = {
       headers: requestHeaders,
       body: body
     };
-    const response = await this.props.context.httpClient.post(postURL, HttpClient.configurations.v1, postOptions);
+
+    const response = await this.props.context.httpClient.post(
+      postURL,
+      HttpClient.configurations.v1,
+      postOptions
+    );
+
     if (response) {
       const responseJSON = await response.json();
       if (response.ok) {
@@ -657,29 +733,87 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     }
   }
 
-
+  // Modified submitRFQDept to include file upload
   public submitRFQDept = async () => {
-    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting RFQ Dept Data...' } });
+    this.setState({ modalOverlay: { isOpen: true, Text: 'Uploading files and submitting...' } });
 
-    await this.triggerSubmit();   // use your existing flow submit logic
+    try {
+      // Upload files first
+      const uploadedUrls = await this.uploadFilesToSharePoint();
+      // Store uploaded URLs in state
+      this.setState({ uploadedFileUrls: uploadedUrls });
+      // Then trigger the flow with file URLs included
+      await this.triggerSubmit(uploadedUrls);
 
-    this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+      this.setState({
+        modalOverlay: { isOpen: false, Text: '' },
+        selectedFiles: [] // Clear selected files after successful submission
+      });
+    } catch (error) {
+      console.error("Submission error:", error);
+      this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+    }
   };
 
+  // public handleVendorResponseChange = (itemId: number, field: 'status' | 'price' | 'comments', value: string): void => {
+  //   this.setState(prevState => ({
+  //     vendorResponses: {
+  //       ...prevState.vendorResponses,
+  //       [itemId]: {
+  //         // Preserve all existing fields for this itemId
+  //         ...(prevState.vendorResponses[itemId] || {}),
+  //         // Only update the specific field being changed
+  //         [field]: value
+  //       }
+  //     }
+  //   }));
+  // };
 
 
-  public handleVendorResponseChange = (itemId: number, field: 'status' | 'price' | 'comments', value: string): void => {
+  public handleVendorResponseChange = (
+    itemId: number,
+    field: 'status' | 'price' | 'comments' | 'termsAndConditions' | 'technicalSupport' | 'warrantySupport',
+    value: string
+  ): void => {
     this.setState(prevState => ({
       vendorResponses: {
         ...prevState.vendorResponses,
         [itemId]: {
-          // Preserve all existing fields for this itemId
           ...(prevState.vendorResponses[itemId] || {}),
-          // Only update the specific field being changed
           [field]: value
         }
       }
     }));
+  };
+  // Handler for file changes per item
+  public handleVendorFileChange = (itemId: number, files: File[]): void => {
+    this.setState(prevState => ({
+      vendorResponses: {
+        ...prevState.vendorResponses,
+        [itemId]: {
+          ...(prevState.vendorResponses[itemId] || {}),
+          attachments: files
+        }
+      }
+    }));
+  };
+
+  // Handler for removing a file from an item
+  public handleVendorFileRemove = (itemId: number, fileIndex: number): void => {
+    this.setState(prevState => {
+      const currentFiles = prevState.vendorResponses[itemId]?.attachments || [];
+      const updatedFiles = currentFiles.filter((_, index) => index !== fileIndex);
+
+      return {
+        vendorResponses: {
+          ...prevState.vendorResponses,
+          [itemId]: {
+            ...(prevState.vendorResponses[itemId] || {}),
+            attachments: updatedFiles
+          }
+        }
+      };
+    });
   };
 
 
@@ -784,7 +918,93 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ modalOverlay: { isOpen: false, Text: '' } });
   };
 
+  // public async triggerVendorSubmit() {
+  //   const vendorFlow = "QatarCement_RFQVendorSubmit";
 
+  //   const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
+  //     strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+  //   const filter = `Title eq '${vendorFlow}'`;
+
+  //   const laUrl = await this.service.getItemsFilter(queryurl, filter);
+  //   const postURL = laUrl[0].AppURL;
+
+  //   const headers = new Headers();
+  //   headers.append("Content-type", "application/json");
+
+  //   const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
+
+  //   const vendorAssignedItems = this.state.itemDetails.filter(item => {
+  //     if (!item.vendors) return false;
+  //     const vendorList = item.vendors.toLowerCase();
+  //     const emails = vendorList.split(/[,;]/).map(e => e.trim());
+  //     return emails.some(email => email === userEmailLower || email.includes(userEmailLower));
+  //   });
+
+  //   // Upload files for each item and collect attachment URLs
+  //   const libraryPath = `${this.props.context.pageContext.web.serverRelativeUrl}/Shared Documents`;
+
+  //   const itemDetailsWithResponses = await Promise.all(
+  //     vendorAssignedItems.map(async (item) => {
+  //       let attachmentUrls: string[] = [];
+
+  //       // Upload files if any exist for this item
+  //       const itemFiles = this.state.vendorResponses[item.Id]?.attachments;
+  //       if (itemFiles && itemFiles.length > 0 && item.WorkflowDetailsId) {
+  //         try {
+  //           const uploadedFiles = await this.service.uploadAndAttachToWorkflowDetails(
+  //             libraryPath,
+  //             item.WorkflowDetailsId,
+  //             itemFiles,
+  //             this.state.masterid,
+  //             item.Id
+  //           );
+  //           attachmentUrls = uploadedFiles.map(f => f.url);
+  //         } catch (error) {
+  //           console.error(`Error uploading files for item ${item.Id}:`, error);
+  //           ToastService.error(`Failed to upload files for item ${item.ItemCode}`);
+  //         }
+  //       }
+
+  //       return {
+  //         ...item,
+  //         WorkflowDetailsId: item.WorkflowDetailsId,
+  //         vendorStatus: this.state.vendorResponses[item.Id]?.status || '',
+  //         vendorPrice: this.state.vendorResponses[item.Id]?.price || '',
+  //         vendorComments: this.state.vendorResponses[item.Id]?.comments || '',
+  //         attachmentUrls: attachmentUrls
+  //       };
+  //     })
+  //   );
+
+  //   const body: string = JSON.stringify({
+  //     'TaskID': String(this.state.taskID),
+  //     'VendorEmail': this.state.currentUser.email,
+  //     'MasterID': String(this.state.masterid),
+  //     'TermsAndConditions': this.state.vendorResponses[0]?.termsAndConditions || '',
+  //     'TechnicalSupport': this.state.vendorResponses[0]?.technicalSupport || '',
+  //     'WarrantySupport': this.state.vendorResponses[0]?.warrantySupport || '',
+  //     'ItemDetails': itemDetailsWithResponses
+  //   });
+
+  //   console.log("Submitting Vendor Data with Attachments:", itemDetailsWithResponses);
+
+  //   const response = await this.props.context.httpClient.post(
+  //     postURL,
+  //     HttpClient.configurations.v1,
+  //     { headers, body }
+  //   );
+
+  //   const json = await response.json();
+  //   console.log("Vendor Response:", json);
+
+  //   if (response.ok) {
+  //     ToastService.success("Vendor response submitted with attachments!");
+  //   } else {
+  //     ToastService.error("Failed to submit vendor response. Please try again.");
+  //   }
+  // }
+
+  // Replace your existing triggerVendorSubmit method with this fixed version:
 
   public async triggerVendorSubmit() {
     const vendorFlow = "QatarCement_RFQVendorSubmit";
@@ -799,7 +1019,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     const headers = new Headers();
     headers.append("Content-type", "application/json");
 
-    // Filter items assigned to current vendor
     const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
 
     const vendorAssignedItems = this.state.itemDetails.filter(item => {
@@ -809,23 +1028,76 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       return emails.some(email => email === userEmailLower || email.includes(userEmailLower));
     });
 
-    // Add vendor responses + WorkflowDetailsId to filtered items
-    const itemDetailsWithResponses = vendorAssignedItems.map((item) => ({
-      ...item,
-      WorkflowDetailsId: item.WorkflowDetailsId, // ✓ Include WorkflowDetailsId
-      vendorStatus: this.state.vendorResponses[item.Id]?.status || '',
-      vendorPrice: this.state.vendorResponses[item.Id]?.price || '',
-      vendorComments: this.state.vendorResponses[item.Id]?.comments || '',
-    }));
+    console.log("Vendor Assigned Items:", vendorAssignedItems);
+
+    // 🔥 Upload files to WorkflowDetails ATTACHMENTS (not Shared Documents)
+    const itemDetailsWithResponses = await Promise.all(
+      vendorAssignedItems.map(async (item) => {
+        let attachmentSuccess = false;
+        let attachmentCount = 0;
+
+        // ✅ Check if WorkflowDetailsId exists and files are selected
+        const itemFiles = this.state.vendorResponses[item.Id]?.attachments;
+
+        console.log(`Processing Item ${item.Id} (${item.ItemCode}):`, {
+          WorkflowDetailsId: item.WorkflowDetailsId,
+          HasFiles: itemFiles && itemFiles.length > 0,
+          FileCount: itemFiles?.length || 0
+        });
+
+        if (!item.WorkflowDetailsId) {
+          console.error(`❌ Item ${item.Id} (${item.ItemCode}) has NULL WorkflowDetailsId - Cannot attach files`);
+
+          if (itemFiles && itemFiles.length > 0) {
+            ToastService.error(`Cannot attach files for item ${item.ItemCode} - WorkflowDetailsId is missing`);
+          }
+        } else if (itemFiles && itemFiles.length > 0) {
+          try {
+            console.log(`✅ Attaching ${itemFiles.length} files to WorkflowDetails ID: ${item.WorkflowDetailsId}`);
+
+            // 🔥 Use native SharePoint attachments
+            await this.service.addAttachmentsToWorkflowDetails(
+              item.WorkflowDetailsId,
+              itemFiles
+            );
+
+            attachmentSuccess = true;
+            attachmentCount = itemFiles.length;
+
+            console.log(`✅ Successfully attached ${itemFiles.length} files to WorkflowDetails ID ${item.WorkflowDetailsId}`);
+            ToastService.success(`${itemFiles.length} file(s) attached for item ${item.ItemCode}`);
+
+          } catch (error) {
+            console.error(`❌ Error uploading files for item ${item.Id}:`, error);
+            ToastService.error(`Failed to upload files for item ${item.ItemCode}: ${error.message}`);
+          }
+        }
+
+        return {
+          ...item,
+          WorkflowDetailsId: item.WorkflowDetailsId,
+          vendorStatus: this.state.vendorResponses[item.Id]?.status || '',
+          vendorPrice: this.state.vendorResponses[item.Id]?.price || '',
+          vendorComments: this.state.vendorResponses[item.Id]?.comments || '',
+          attachmentSuccess: attachmentSuccess,
+          attachmentCount: attachmentCount
+        };
+      })
+    );
+
+    console.log("Final Item Details with Responses:", itemDetailsWithResponses);
 
     const body: string = JSON.stringify({
       'TaskID': String(this.state.taskID),
       'VendorEmail': this.state.currentUser.email,
       'MasterID': String(this.state.masterid),
-      'ItemDetails': itemDetailsWithResponses, // ✓ Now includes WorkflowDetailsId
+      'TermsAndConditions': this.state.vendorResponses[0]?.termsAndConditions || '',
+      'TechnicalSupport': this.state.vendorResponses[0]?.technicalSupport || '',
+      'WarrantySupport': this.state.vendorResponses[0]?.warrantySupport || '',
+      'ItemDetails': itemDetailsWithResponses
     });
 
-    console.log("Submitting Vendor Data:", itemDetailsWithResponses);
+    console.log("Submitting Vendor Data to Flow:", JSON.parse(body));
 
     const response = await this.props.context.httpClient.post(
       postURL,
@@ -834,16 +1106,20 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     );
 
     const json = await response.json();
-    console.log("Vendor Response:", json);
+    console.log("Vendor Response from Flow:", json);
 
     if (response.ok) {
-      ToastService.success("Vendor response submitted!");
+      ToastService.success("Vendor response submitted successfully!");
+
+      // Clear vendor responses and files after successful submission
+      this.setState({
+        vendorResponses: {}
+      });
     } else {
       ToastService.error("Failed to submit vendor response. Please try again.");
     }
   }
 
-  // Maintenance Manager Response Handler
   public handleMaintenanceManagerResponseChange = (workflowDetailsId: number | null | undefined, field: 'status' | 'comments', value: string): void => {
     if (!workflowDetailsId) {
       console.warn("WorkflowDetailsId is null or undefined, cannot save response");
@@ -916,8 +1192,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         InitiatorStatus: item.InitiatorStatus || '',
         InitiatorComments: item.InitiatorComments || '',
         TaskID: item.TaskID || '',
-        managerStatus: this.state.managerResponses[workflowDetailsId]?.status || '',
-        managerComments: this.state.managerResponses[workflowDetailsId]?.comments || '',
+        MaintenanceManagerStatus: this.state.managerResponses[workflowDetailsId]?.status || '',
+        MaintenanceManagerComments: this.state.managerResponses[workflowDetailsId]?.comments || '',
       };
     });
 
@@ -1075,15 +1351,25 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 handleChange={this.handleChange}
                 onSubmitRFQDept={this.submitRFQDept}
                 onCancel={this.closeWindow}
+                selectedFiles={this.state.selectedFiles}
+                onFileSelect={this.handleFileSelect}
+                onRemoveFile={this.removeFile}
               />
             </>}
             {/* Vendor View */}
             {this.state.userType === "Vendor" && (<>
-              <VendorDetailsTable itemDetails={this.state.itemDetails}
+              <VendorDetailsTable
+                itemDetails={this.state.itemDetails}
                 currentUserEmail={this.state.currentUser.email}
                 onSubmitVendor={this.submitVendor}
                 onCancel={this.closeWindow}
-                onResponseChange={this.handleVendorResponseChange} vendorResponses={this.state.vendorResponses} />
+                onResponseChange={this.handleVendorResponseChange}
+                onFileChange={this.handleVendorFileChange}
+                onRemoveFile={this.handleVendorFileRemove}
+                vendorResponses={this.state.vendorResponses}
+                attachments={this.state.attachments}
+                isLoadingAttachments={this.state.isLoadingAttachments}
+              />
             </>)}
             {/* Initiator View - NEW */}
             {this.state.userType === "Initiator" && (
@@ -1098,7 +1384,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
               />
             )}
             {/* Manager View */}
-            {this.state.userType === "Manager" && (
+            {this.state.userType === "MaintenanceManager" && (
               <ManagerDetailsTable
                 itemDetails={this.state.itemDetails}
                 masterid={this.state.masterid}

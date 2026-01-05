@@ -1,3 +1,118 @@
+// import * as React from 'react';
+// import styles from './RfqReview.module.scss';
+// import { Dropdown, IDropdownOption, PrimaryButton, DefaultButton, TextField } from '@fluentui/react';
+
+// interface IManagerDetailsTableProps {
+//     itemDetails: any[];
+//     masterid: string;
+//     taskID: string | null;
+//     managerResponses: Record<number, { status?: string; comments?: string }>;
+//     onResponseChange: (itemId: number, field: 'status' | 'comments', value: string) => void;
+//     onSubmitManager: () => void;
+//     onCancel: () => void;
+// }
+
+// const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
+//     itemDetails,
+//     managerResponses,
+//     onResponseChange,
+//     onSubmitManager,
+//     onCancel
+// }) => {
+
+//     const statusOptions: IDropdownOption[] = [
+//         { key: 'Technically Accepted', text: 'Technically Accepted' },
+//         { key: 'Technically Not Accepted', text: 'Technically Not Accepted' },
+//     ];
+
+//     return (
+//         <div className={styles.row}>
+//             <div className={styles.col12}>
+//                 <div className={styles.doctable}>
+//                     <table className={styles.table}>
+//                         <thead>
+//                             <tr className={styles.tr}>
+//                                 <th className={styles.th}>S.No</th>
+//                                 <th className={styles.th}>Item Code</th>
+//                                 <th className={styles.th}>Description</th>
+//                                 <th className={styles.th}>Quantity</th>
+//                                 <th className={styles.th}>UOM</th>
+//                                 <th className={styles.th}>Vendor</th>
+//                                 <th className={styles.th}>Vendor Status</th>
+//                                 <th className={styles.th}>Vendor Comments</th>
+//                                 <th className={styles.th}>Technical Status</th>
+//                                 <th className={styles.th}>Technical Comments</th>
+//                             </tr>
+//                         </thead>
+//                         <tbody>
+//                             {itemDetails.length > 0 ? (
+//                                 itemDetails.map((item, index) => (
+//                                     <tr key={`${item.WorkflowDetailsId}-${index}`} className={styles.tr}>
+//                                         <td className={styles.th}>{index + 1}</td>
+//                                         <td className={styles.th}>{item.ItemCode}</td>
+//                                         <td className={styles.th}>{item.Description}</td>
+//                                         <td className={styles.th}>{item.Quantity}</td>
+//                                         <td className={styles.th}>{item.UOM}</td>
+//                                         <td className={styles.th}>{item.Vendor}</td>
+//                                         <td className={styles.th}>{item.Status || '-'}</td>
+//                                         <td className={styles.th}>{item.Comments || '-'}</td>
+//                                         <td className={styles.th}>
+//                                             <Dropdown
+//                                                 placeholder="Select Status"
+//                                                 options={statusOptions}
+//                                                 selectedKey={managerResponses[item.WorkflowDetailsId]?.status || ''}
+//                                                 onChange={(e, option) => {
+//                                                     if (option) {
+//                                                         onResponseChange(item.WorkflowDetailsId, 'status', option.key as string);
+//                                                     }
+//                                                 }}
+//                                                 styles={{ dropdown: { width: 150 } }}
+//                                             />
+//                                         </td>
+//                                         <td className={styles.th}>
+//                                             <TextField
+//                                                 placeholder="Enter comments"
+//                                                 value={managerResponses[item.WorkflowDetailsId]?.comments || ''}
+//                                                 onChange={(e, newValue) => {
+//                                                     onResponseChange(item.WorkflowDetailsId, 'comments', newValue || '');
+//                                                 }}
+//                                                 multiline
+//                                                 rows={2}
+//                                             />
+//                                         </td>
+//                                     </tr>
+//                                 ))
+//                             ) : (
+//                                 <tr>
+//                                     <td colSpan={10} style={{ textAlign: 'center' }}>
+//                                         No items found
+//                                     </td>
+//                                 </tr>
+//                             )}
+//                         </tbody>
+//                     </table>
+//                 </div>
+
+
+//                 <div className={styles.row}>
+//                     <div className={styles.col12}>
+//                         <div className={styles.rgtalign}>
+//                             <PrimaryButton className={styles.btn} onClick={onSubmitManager}>
+//                                 Submit Technical Review
+//                             </PrimaryButton>
+//                             <DefaultButton className={styles.btn} onClick={onCancel}>                                Close
+//                             </DefaultButton>
+//                         </div>
+//                     </div>
+//                 </div>
+//             </div>
+//         </div>
+//     );
+// };
+
+// export default ManagerDetailsTable;
+
+
 import * as React from 'react';
 import styles from './RfqReview.module.scss';
 import { Dropdown, IDropdownOption, PrimaryButton, DefaultButton, TextField } from '@fluentui/react';
@@ -21,8 +136,8 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
 }) => {
 
     const statusOptions: IDropdownOption[] = [
-        { key: 'Technically Accepted', text: 'Technically Accepted' },
-        { key: 'Technically Not Accepted', text: 'Technically Not Accepted' },
+        { key: 'Approved', text: 'Approved' },
+        { key: 'Rejected', text: 'Rejected' },
     ];
 
     return (
@@ -39,9 +154,12 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                                 <th className={styles.th}>UOM</th>
                                 <th className={styles.th}>Vendor</th>
                                 <th className={styles.th}>Vendor Status</th>
+                                <th className={styles.th}>Vendor Price</th>
                                 <th className={styles.th}>Vendor Comments</th>
-                                <th className={styles.th}>Technical Status</th>
-                                <th className={styles.th}>Technical Comments</th>
+                                <th className={styles.th}>Initiator Status</th>
+                                <th className={styles.th}>Initiator Comments</th>
+                                <th className={styles.th}>Maintenance Manager Status</th>
+                                <th className={styles.th}>Maintenance Manager Comments</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -55,7 +173,10 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                                         <td className={styles.th}>{item.UOM}</td>
                                         <td className={styles.th}>{item.Vendor}</td>
                                         <td className={styles.th}>{item.Status || '-'}</td>
+                                        <td className={styles.th}>{item.Price || '-'}</td>
                                         <td className={styles.th}>{item.Comments || '-'}</td>
+                                        <td className={styles.th}>{item.InitiatorStatus || '-'}</td>
+                                        <td className={styles.th}>{item.InitiatorComments || '-'}</td>
                                         <td className={styles.th}>
                                             <Dropdown
                                                 placeholder="Select Status"
@@ -84,7 +205,7 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={10} style={{ textAlign: 'center' }}>
+                                    <td colSpan={13} style={{ textAlign: 'center' }}>
                                         No items found
                                     </td>
                                 </tr>
@@ -98,9 +219,10 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                     <div className={styles.col12}>
                         <div className={styles.rgtalign}>
                             <PrimaryButton className={styles.btn} onClick={onSubmitManager}>
-                                Submit Technical Review
+                                Submit Maintenance Manager Review
                             </PrimaryButton>
-                            <DefaultButton className={styles.btn} onClick={onCancel}>                                Close
+                            <DefaultButton className={styles.btn} onClick={onCancel}>
+                                Close
                             </DefaultButton>
                         </div>
                     </div>
