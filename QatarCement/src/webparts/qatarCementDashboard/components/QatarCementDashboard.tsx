@@ -379,7 +379,16 @@ export default class QatarCementDashboard extends React.Component<
   public render(): React.ReactElement<IQatarCementDashboardProps> {
 
     return (
+
       <section className={styles.container}>
+        <div className={styles.formpopup}>
+          <div className={styles.formheader}>
+            <div className={styles.formtitle}>{this.props.wpproperties.webpartTitle}</div>
+          </div>
+          <div className={styles.formbody}>
+          </div>
+        </div>
+
         <DetailsList
 
           items={this.state.listItems || []}
