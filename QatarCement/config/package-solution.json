@@ -7,7 +7,7 @@
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,  
-    "developer": {
+    "developer": { 
       "name": "",
       "websiteUrl": "",
       "privacyUrl": "",
