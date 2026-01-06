@@ -1134,7 +1134,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       postURL,
       HttpClient.configurations.v1,
       postOptions
-    );
+    ); 
 
     if (response) {
       const responseJSON = await response.json();
