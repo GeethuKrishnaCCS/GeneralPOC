@@ -47,7 +47,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
     this.validateURLParams = this.validateURLParams.bind(this);
-    this.bindVendorData = this.bindVendorData.bind(this);
+    this.bindRFQData = this.bindRFQData.bind(this);
     this.bindWorkflowData = this.bindWorkflowData.bind(this);
     this.checkUserGroup = this.checkUserGroup.bind(this);
     this.bindMasterData = this.bindMasterData.bind(this);
@@ -69,6 +69,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.submitProcurementManager = this.submitProcurementManager.bind(this);
     this.triggerMaintenanceManagerSubmit = this.triggerMaintenanceManagerSubmit.bind(this);
     this.triggerProcurementManagerSubmit = this.triggerProcurementManagerSubmit.bind(this);
+    this.fetchAttachments = this.fetchAttachments.bind(this);
+    this.bindMasterDataForInitiator = this.bindMasterDataForInitiator.bind(this);
+    this.bindMasterDataForManager = this.bindMasterDataForManager.bind(this);
+    this.bindMasterDataForProcurementManager = this.bindMasterDataForProcurementManager.bind(this);
 
   }
   public async componentDidMount(): Promise<void> {
@@ -132,274 +136,31 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     }
   }
 
-  //  fetch attachments:
-  public async fetchAttachments(masterid: string) {
-    this.setState({ isLoadingAttachments: true });
+  // Check user in RFQDept group
+  public async checkUserGroup(masterid: any) {
+    const isInGroup = await this.service.isUserInGroup("RFQDept");
+    if (!isInGroup) {
+      ToastService.error("You do not have permission to access this form.");
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+    }
+    else {
+      /* Bind data */
+      await this.bindRFQData();
+      /*  Bind Master Data */
+      await this.bindMasterData(masterid);
 
-    try {
-      const libraryName = "Shared Documents"; // or use this.props.wpproperties.DocumentLibraryName
-      const attachments = await this.service.getAttachmentsByPRDetailID(libraryName, masterid);
-
-      console.log("Fetched attachments for PRDetailID:", masterid, attachments);
-
-      this.setState({
-        attachments: attachments,
-        isLoadingAttachments: false
-      });
-    } catch (error) {
-      console.error("Error fetching attachments:", error);
-      ToastService.error("Failed to load attachments.");
-      this.setState({ isLoadingAttachments: false });
     }
   }
-
-
-  // Add this new method to handle Initiator case
-  public async bindInitiatorData(masterid: any, taskid: any) {
-    try {
-      const taskqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
-        strings.queryList + this.props.wpproperties.WorkflowTasksListName;
-      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
-      const expand = "AssignedTo";
-
-      const workflowData = await this.service.getItemsByIdSelectExpand(
-        taskqueryurl,
-        Number(taskid),
-        select,
-        expand
-      );
-
-      console.log("Initiator Workflow Data:", workflowData);
-
-      if (workflowData) {
-        // Verify the current user is the PR Initiator
-        if (workflowData.AssignedTo.EMail.toLowerCase() === this.state.currentUser.email.toLowerCase()) {
-          this.setState({ userType: "Initiator" });
-          await this.bindMasterDataForInitiator(masterid);
-        } else {
-          this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
-          ToastService.error("You are not authorized to access this task as Initiator.");
-          return;
-        }
-      } else {
-        ToastService.error("No workflow data found for the provided Task ID.");
-      }
-    } catch (error) {
-      console.error("Error fetching initiator workflow data:", error);
-      ToastService.error("Failed to fetch workflow data. Please try again later.");
-    }
-  }
-
-  public async bindManagerData(masterid: string, taskid: string) {
-    try {
-      // 1. Check group membership first (extra security layer)
-      const isInMaintenanceManager = await this.service.isUserInGroup("MaintenanceManager");
-      if (!isInMaintenanceManager) {
-        ToastService.error("You must be a member of the Maintenance Manager group to access this view.");
-        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
-        return;
-      }
-
-      // 2. Then check workflow task assignment
-      const taskqueryurl = `${this.props.context.pageContext.web.serverRelativeUrl}${strings.queryList}${this.props.wpproperties.WorkflowTasksListName}`;
-      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
-      const expand = "AssignedTo";
-
-      const workflowData = await this.service.getItemsByIdSelectExpand(
-        taskqueryurl,
-        Number(taskid),
-        select,
-        expand
-      );
-
-      if (!workflowData) {
-        ToastService.error("No workflow data found for the provided Task ID.");
-        return;
-      }
-
-      if (workflowData.AssignedTo.EMail.toLowerCase() !== this.state.currentUser.email.toLowerCase()) {
-        ToastService.error("You are not assigned to this task as Maintenance Manager.");
-        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
-        return;
-      }
-
-      // If both checks pass
-      this.setState({ userType: "MaintenanceManager" });
-      await this.bindMasterDataForManager(masterid);
-
-    } catch (error) {
-      console.error("Error in bindManagerData:", error);
-      ToastService.error("Failed to validate access. Please try again.");
-    }
-  }
-
-  // Bind Master Data For Manager
-  public async bindMasterDataForManager(masterid: any) {
-    let masterdata: any;
-    let itemdetaildataitems: any[] = [];
-
-    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
-      strings.queryList + this.props.wpproperties.PRDetailsListName;
-    const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
-    const expand = "PRInitiator";
-
-    try {
-      // Fetch master PR data
-      masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
-      console.log("masterdata", masterdata);
-
-      // Fetch WorkflowDetails where InitiatorStatus = 'Technically Accepted'
-      const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
-        strings.queryList + "WorkflowDetails";
-      // const workflowFilter = `PRDetailID eq ${masterid}`;
-      const workflowFilter = `PRDetailID eq ${masterid} and InitiatorStatus eq 'Technically Accepted'`;
-
-      const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
-      console.log("Maintenance Manager WorkflowDetails:", workflowDetailsData);
-
-      if (workflowDetailsData.length > 0) {
-        // Create separate row for each technically accepted item
-        workflowDetailsData.forEach((wf: any, index: number) => {
-          itemdetaildataitems.push({
-            index: index + 1,
-            Id: wf.PRItemID,
-            WorkflowDetailsId: wf.Id,
-            Description: wf.Description,
-            ItemCode: wf.ItemCode,
-            Quantity: String(wf.Qty),
-            UOM: wf.UoM,
-            Title: wf.Title,
-            vendors: wf.Vendor || '',
-            Vendor: wf.Vendor,
-            Status: wf.Status,
-            Price: wf.Price || '',
-            Comments: wf.Comments || '',
-            InitiatorStatus: wf.InitiatorStatus,
-            InitiatorComments: wf.InitiatorComments || '',
-            TaskID: wf.TaskID
-          });
-        });
-      }
-
-      this.setState({
-        masterid: masterid,
-        prNumber: masterdata.PRNumber,
-        department: masterdata.Department,
-        priority: masterdata.Priority,
-        dueDate: masterdata.DueDate,
-        prInitiator: masterdata.PRInitiator.Title,
-        businessJustification: masterdata.BusinessJustification,
-        modalOverlay: { isOpen: false, Text: '' },
-        itemDetails: itemdetaildataitems
-      });
-
-    } catch (error) {
-      console.error("Error fetching manager data:", error);
-      ToastService.error("Failed to fetch data. Please try again later.");
-    }
-  }
-
-  // Bind Procurement Manager Data
-  public async bindProcurementManagerData(masterid: any, taskid: any) {
-    try {
-      const taskqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
-        strings.queryList + this.props.wpproperties.WorkflowTasksListName;
-      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
-      const expand = "AssignedTo";
-
-      const workflowData = await this.service.getItemsByIdSelectExpand(
-        taskqueryurl,
-        Number(taskid),
-        select,
-        expand
-      );
-
-      console.log("Procurement Manager Workflow Data:", workflowData);
-
-      if (workflowData) {
-        // Verify the current user is the Procurement Manager
-        if (workflowData.AssignedTo.EMail.toLowerCase() === this.state.currentUser.email.toLowerCase()) {
-          this.setState({ userType: "ProcurementManager" });
-          await this.bindMasterDataForProcurementManager(masterid);
-        } else {
-          this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
-          ToastService.error("You are not authorized to access this task as Procurement Manager.");
-          return;
-        }
-      } else {
-        ToastService.error("No workflow data found for the provided Task ID.");
-      }
-    } catch (error) {
-      console.error("Error fetching procurement manager workflow data:", error);
-      ToastService.error("Failed to fetch workflow data. Please try again later.");
-    }
-  }
-
-  // Bind Master Data For Procurement Manager
-  public async bindMasterDataForProcurementManager(masterid: any) {
-    let masterdata: any;
-    let itemdetaildataitems: any[] = [];
-
-    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
-      strings.queryList + this.props.wpproperties.PRDetailsListName;
-    const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
-    const expand = "PRInitiator";
-
-    try {
-      // Fetch master PR data
-      masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
-      console.log("masterdata", masterdata);
-
-      // Fetch WorkflowDetails where ManagerStatus = 'Approved'
-      const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
-        strings.queryList + "WorkflowDetails";
-      const workflowFilter = `PRDetailID eq ${masterid} and ManagerStatus eq 'Approved'`;
-
-      const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
-      console.log("Procurement Manager WorkflowDetails:", workflowDetailsData);
-
-      if (workflowDetailsData.length > 0) {
-        // Create separate row for each approved item
-        workflowDetailsData.forEach((wf: any, index: number) => {
-          itemdetaildataitems.push({
-            index: index + 1,
-            Id: wf.PRItemID,
-            WorkflowDetailsId: wf.Id,
-            Description: wf.Description,
-            ItemCode: wf.ItemCode,
-            Quantity: String(wf.Qty),
-            UOM: wf.UoM,
-            Title: wf.Title,
-            vendors: wf.Vendor || '',
-            Vendor: wf.Vendor,
-            Status: wf.Status,
-            Price: wf.Price || '',
-            Comments: wf.Comments || '',
-            InitiatorStatus: wf.InitiatorStatus,
-            InitiatorComments: wf.InitiatorComments || '',
-            ManagerStatus: wf.ManagerStatus,
-            ManagerComments: wf.ManagerComments || '',
-            TaskID: wf.TaskID
-          });
-        });
-      }
-
-      this.setState({
-        masterid: masterid,
-        prNumber: masterdata.PRNumber,
-        department: masterdata.Department,
-        priority: masterdata.Priority,
-        dueDate: masterdata.DueDate,
-        prInitiator: masterdata.PRInitiator.Title,
-        businessJustification: masterdata.BusinessJustification,
-        modalOverlay: { isOpen: false, Text: '' },
-        itemDetails: itemdetaildataitems
-      });
-
-    } catch (error) {
-      console.error("Error fetching procurement manager data:", error);
-      ToastService.error("Failed to fetch data. Please try again later.");
-    }
+  // Bind Vendor Data
+  public async bindRFQData() {
+    // Bind Document Type
+    const vendorqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.vendorListName;
+    const getVendorchoice = await this.service.getPagedListItems(vendorqueryurl);
+    const VendorsName: { key: string, text: string }[] = [];
+    getVendorchoice.map((item: any) => {
+      VendorsName.push({ key: item.Title, text: item.Title });
+    });
+    this.setState({ vendorOptions: VendorsName, userType: "RFQDept" });
   }
 
   // Check current user from workflow task data
@@ -430,45 +191,19 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       ToastService.error("Failed to fetch workflow data. Please try again later.");
     }
   }
-  // Check user in RFQDept group
-  public async checkUserGroup(masterid: any) {
-    const isInGroup = await this.service.isUserInGroup("RFQDept");
-    if (!isInGroup) {
-      ToastService.error("You do not have permission to access this form.");
-      this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
-    }
-    else {
-      /* Bind data */
-      await this.bindVendorData();
-      /*  Bind Master Data */
-      await this.bindMasterData(masterid);
-
-    }
-  }
-  // Bind Vendor Data
-  public async bindVendorData() {
-    // Bind Document Type
-    const vendorqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.vendorListName;
-    const getVendorchoice = await this.service.getPagedListItems(vendorqueryurl);
-    const VendorsName: { key: string, text: string }[] = [];
-    getVendorchoice.map((item: any) => {
-      VendorsName.push({ key: item.Title, text: item.Title });
-    });
-    this.setState({ vendorOptions: VendorsName, userType: "RFQDept" });
-  }
 
   public async bindMasterData(masterid: any) {
     let masterdata: any;
     let itemdetaildata: any[];
     let itemdetaildataitems: any[] = [];
 
-    // Fetch master index item
-    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRDetailsListName;
+    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.PRDetailsListName;
     const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
     const expand = "PRInitiator";
 
-    // Fetch master item details
-    const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl + strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
+    const itemdetailqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.PRItemSpecficationsListName;
     const itemfilter = "PRDetailsIDId eq '" + Number(masterid) + "'";
 
     try {
@@ -478,7 +213,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       itemdetaildata = await this.service.getPagedFilterListItems(itemdetailqueryurl, itemfilter);
       console.log("itemdetaildata", itemdetaildata);
 
-      // ✓ Fetch WorkflowDetails only for Vendor
+      // ✅ Fetch WorkflowDetails only for Vendor
       let workflowDetailsMap: Record<string, number> = {};
 
       if (this.state.userType === "Vendor" && this.state.taskID) {
@@ -487,7 +222,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
           strings.queryList +
           "WorkflowDetails";
 
-        // 🔑 FIXED: Proper filter for WorkflowDetails
         const workflowFilter =
           `PRDetailID eq '${this.state.masterid}' and ` +
           `TaskID eq '${this.state.taskID}' and ` +
@@ -500,10 +234,21 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
         console.log("workflowDetailsData fetched:", workflowDetailsData);
 
+        // 🚨 CRITICAL VALIDATION: No workflow records found
+        if (!workflowDetailsData || workflowDetailsData.length === 0) {
+          this.setState({
+            modalOverlay: { isOpen: true, Text: 'No Items Assigned' }
+          });
+          ToastService.error(
+            "No items have been assigned to you for this RFQ. " +
+            "Please contact the RFQ Department if you believe this is an error."
+          );
+          return; // ✅ Stop processing
+        }
+
         // 🔑 Map PRItemID → WorkflowDetails ID
         workflowDetailsData.forEach((wfItem: any) => {
           if (wfItem.PRItemID) {
-            // Convert both to string for consistent comparison
             const prItemIdKey = String(wfItem.PRItemID).trim();
             workflowDetailsMap[prItemIdKey] = wfItem.Id;
             console.log(`Mapped PRItemID ${prItemIdKey} -> WorkflowDetailsId ${wfItem.Id}`);
@@ -513,10 +258,17 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         console.log("WorkflowDetails Map:", workflowDetailsMap);
       }
 
+      // ✅ Only process items that have WorkflowDetailsId (for vendors)
       if (itemdetaildata.length > 0) {
         itemdetaildata.forEach((item: any, index: any) => {
           const itemIdKey = String(item.Id).trim();
           const workflowDetailsId = workflowDetailsMap[itemIdKey] || null;
+
+          // For vendors, only include items assigned to them
+          if (this.state.userType === "Vendor" && !workflowDetailsId) {
+            console.warn(`Skipping Item ${item.Id} - not assigned to vendor`);
+            return; // Skip this item
+          }
 
           console.log(`Item ${item.Id} (${item.ItemCode}) -> WorkflowDetailsId: ${workflowDetailsId}`);
 
@@ -529,9 +281,18 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
             UOM: item.UoM,
             Title: item.Title,
             vendors: item.Vendors,
-            WorkflowDetailsId: workflowDetailsId // ✅ THIS IS THE KEY LINE
+            WorkflowDetailsId: workflowDetailsId
           });
         });
+      }
+
+      // 🚨 FINAL VALIDATION: No items after filtering
+      if (this.state.userType === "Vendor" && itemdetaildataitems.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Items Available' }
+        });
+        ToastService.error("No items are currently available for you to respond to.");
+        return;
       }
 
       console.log("Final itemDetails with WorkflowDetailsId:", itemdetaildataitems);
@@ -555,10 +316,73 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     } catch (error) {
       console.error("Error fetching data:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
       ToastService.error("Failed to fetch data. Please try again later.");
     }
   }
 
+  //  fetch attachments:
+  public async fetchAttachments(masterid: string) {
+    this.setState({ isLoadingAttachments: true });
+
+    try {
+      const libraryName = "Shared Documents"; // or use this.props.wpproperties.DocumentLibraryName
+      const attachments = await this.service.getAttachmentsByPRDetailID(libraryName, masterid);
+
+      console.log("Fetched attachments for PRDetailID:", masterid, attachments);
+
+      this.setState({
+        attachments: attachments,
+        isLoadingAttachments: false
+      });
+    } catch (error) {
+      console.error("Error fetching attachments:", error);
+      ToastService.error("Failed to load attachments.");
+      this.setState({ isLoadingAttachments: false });
+    }
+  }
+
+  // Bind Initiator Data
+  public async bindInitiatorData(masterid: any, taskid: any) {
+    try {
+      const taskqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
+        strings.queryList + this.props.wpproperties.WorkflowTasksListName;
+      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
+      const expand = "AssignedTo";
+
+      const workflowData = await this.service.getItemsByIdSelectExpand(
+        taskqueryurl,
+        Number(taskid),
+        select,
+        expand
+      );
+
+      console.log("Initiator Workflow Data:", workflowData);
+
+      if (!workflowData) {
+        ToastService.error("No workflow data found for the provided Task ID.");
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Task Not Found' } });
+        return;
+      }
+
+      // Verify the current user is the PR Initiator
+      if (workflowData.AssignedTo.EMail.toLowerCase() !== this.state.currentUser.email.toLowerCase()) {
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+        ToastService.error("You are not authorized to access this task as Initiator.");
+        return;
+      }
+
+      this.setState({ userType: "Initiator" });
+      await this.bindMasterDataForInitiator(masterid);
+
+    } catch (error) {
+      console.error("Error fetching initiator workflow data:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
+      ToastService.error("Failed to fetch workflow data. Please try again later.");
+    }
+  }
+
+  // ✅ IMPROVED: bindMasterDataForInitiator with validation
   public async bindMasterDataForInitiator(masterid: any) {
     let masterdata: any;
     let itemdetaildataitems: any[] = [];
@@ -576,31 +400,53 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       // Fetch WorkflowDetails for all items related to this PR
       const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
         strings.queryList + "WorkflowDetails";
-      const workflowFilter = `PRDetailID eq ${masterid}`;
+      // const workflowFilter = `PRDetailID eq ${masterid}`;
+      const workflowFilter = `PRDetailID eq ${masterid} and Status eq 'Available'`;
 
       const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
       console.log("Initiator WorkflowDetails:", workflowDetailsData);
 
-      if (workflowDetailsData.length > 0) {
-        // Create separate row for each vendor response (no grouping)
-        workflowDetailsData.forEach((wf: any, index: number) => {
-          itemdetaildataitems.push({
-            index: index + 1,
-            Id: wf.PRItemID,                    // Item ID from WorkflowDetails
-            WorkflowDetailsId: wf.Id,           // WorkflowDetails record ID
-            Description: wf.Description,
-            ItemCode: wf.ItemCode,
-            Quantity: wf.Qty,
-            UOM: wf.UoM,
-            Title: wf.Title,
-            Vendor: wf.Vendor,                  // Individual vendor email
-            Status: wf.Status,                  // Individual vendor email
-            Price: wf.Price || '',              // Vendor's quoted price
-            Comments: wf.Comments || '',        // Vendor's comments
-            TaskID: wf.TaskID                   // Associated task ID
-          });
+      // 🚨 CRITICAL VALIDATION: No workflow records (no vendor responses yet)
+      if (!workflowDetailsData || workflowDetailsData.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Vendor Responses Yet' }
         });
+        ToastService.error(
+          "No vendor responses have been submitted for this RFQ yet. " +
+          "Please wait for vendors to respond before performing technical review."
+        );
+        return; // ✅ Stop processing
       }
+
+      // Create separate row for each vendor response (no grouping)
+      workflowDetailsData.forEach((wf: any, index: number) => {
+        itemdetaildataitems.push({
+          index: index + 1,
+          Id: wf.PRItemID,
+          WorkflowDetailsId: wf.Id,
+          Description: wf.Description,
+          ItemCode: wf.ItemCode,
+          Quantity: wf.Qty,
+          UOM: wf.UoM,
+          Title: wf.Title,
+          Vendor: wf.Vendor,
+          Status: wf.Status,
+          Price: wf.Price || '',
+          Comments: wf.Comments || '',
+          TaskID: wf.TaskID
+        });
+      });
+
+      // 🚨 SECONDARY VALIDATION: Ensure items were processed
+      if (itemdetaildataitems.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Items Available' }
+        });
+        ToastService.error("No items are currently available for initiator review.");
+        return;
+      }
+
+      console.log("Final itemDetails for Initiator:", itemdetaildataitems);
 
       this.setState({
         masterid: masterid,
@@ -615,10 +461,285 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       });
 
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching initiator data:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
       ToastService.error("Failed to fetch data. Please try again later.");
     }
   }
+
+  public async bindManagerData(masterid: string, taskid: string) {
+    try {
+      // 1. Check group membership first (extra security layer)
+      const isInMaintenanceManager = await this.service.isUserInGroup("MaintenanceManager");
+      if (!isInMaintenanceManager) {
+        ToastService.error("You must be a member of the Maintenance Manager group to access this view.");
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+        return;
+      }
+
+      // 2. Then check workflow task assignment
+      const taskqueryurl = `${this.props.context.pageContext.web.serverRelativeUrl}${strings.queryList}${this.props.wpproperties.WorkflowTasksListName}`;
+      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
+      const expand = "AssignedTo";
+
+      const workflowData = await this.service.getItemsByIdSelectExpand(
+        taskqueryurl,
+        Number(taskid),
+        select,
+        expand
+      );
+
+      if (!workflowData) {
+        ToastService.error("No workflow data found for the provided Task ID.");
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Task Not Found' } });
+        return;
+      }
+
+      if (workflowData.AssignedTo.EMail.toLowerCase() !== this.state.currentUser.email.toLowerCase()) {
+        ToastService.error("You are not assigned to this task as Maintenance Manager.");
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+        return;
+      }
+
+      // If both checks pass
+      this.setState({ userType: "MaintenanceManager" });
+      await this.bindMasterDataForManager(masterid);
+
+    } catch (error) {
+      console.error("Error in bindManagerData:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
+      ToastService.error("Failed to validate access. Please try again.");
+    }
+  }
+
+  // Bind Master Data For Manager 
+  public async bindMasterDataForManager(masterid: any) {
+    let masterdata: any;
+    let itemdetaildataitems: any[] = [];
+
+    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.PRDetailsListName;
+    const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
+    const expand = "PRInitiator";
+
+    try {
+      // Fetch master PR data
+      masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
+      console.log("masterdata", masterdata);
+
+      // Fetch WorkflowDetails where InitiatorStatus = 'Technically Accepted'
+      const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
+        strings.queryList + "WorkflowDetails";
+      const workflowFilter = `PRDetailID eq ${masterid} and InitiatorStatus eq 'Technically Accepted'`;
+
+      const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
+      console.log("Maintenance Manager WorkflowDetails:", workflowDetailsData);
+
+      // 🚨 CRITICAL VALIDATION: No technically accepted items found
+      if (!workflowDetailsData || workflowDetailsData.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Items for Review' }
+        });
+        ToastService.error(
+          "No items have been technically accepted by the Initiator yet. " +
+          "Please wait for the Initiator to complete their technical review before proceeding."
+        );
+        return; // ✅ Stop processing
+      }
+
+      // Create separate row for each technically accepted item
+      workflowDetailsData.forEach((wf: any, index: number) => {
+        itemdetaildataitems.push({
+          index: index + 1,
+          Id: wf.PRItemID,
+          WorkflowDetailsId: wf.Id,
+          Description: wf.Description,
+          ItemCode: wf.ItemCode,
+          Quantity: String(wf.Qty),
+          UOM: wf.UoM,
+          Title: wf.Title,
+          vendors: wf.Vendor || '',
+          Vendor: wf.Vendor,
+          Status: wf.Status,
+          Price: wf.Price || '',
+          Comments: wf.Comments || '',
+          InitiatorStatus: wf.InitiatorStatus,
+          InitiatorComments: wf.InitiatorComments || '',
+          TaskID: wf.TaskID
+        });
+      });
+
+      // 🚨 SECONDARY VALIDATION: Ensure items were processed
+      if (itemdetaildataitems.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Items Available' }
+        });
+        ToastService.error("No items are currently available for maintenance manager review.");
+        return;
+      }
+
+      console.log("Final itemDetails for Manager:", itemdetaildataitems);
+
+      this.setState({
+        masterid: masterid,
+        prNumber: masterdata.PRNumber,
+        department: masterdata.Department,
+        priority: masterdata.Priority,
+        dueDate: masterdata.DueDate,
+        prInitiator: masterdata.PRInitiator.Title,
+        businessJustification: masterdata.BusinessJustification,
+        modalOverlay: { isOpen: false, Text: '' },
+        itemDetails: itemdetaildataitems
+      });
+
+    } catch (error) {
+      console.error("Error fetching manager data:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
+      ToastService.error("Failed to fetch data. Please try again later.");
+    }
+  }
+
+
+  // Bind Procurement Manager Data
+
+  public async bindProcurementManagerData(masterid: any, taskid: any) {
+    try {
+      // 1. Check group membership first (optional extra security)
+      const isInProcurementManager = await this.service.isUserInGroup("ProcurementManager");
+      if (!isInProcurementManager) {
+        ToastService.error("You must be a member of the Procurement Manager group to access this view.");
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+        return;
+      }
+
+      // 2. Check workflow task assignment
+      const taskqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
+        strings.queryList + this.props.wpproperties.WorkflowTasksListName;
+      const select = "*,AssignedTo/ID,AssignedTo/Title,AssignedTo/EMail";
+      const expand = "AssignedTo";
+
+      const workflowData = await this.service.getItemsByIdSelectExpand(
+        taskqueryurl,
+        Number(taskid),
+        select,
+        expand
+      );
+
+      console.log("Procurement Manager Workflow Data:", workflowData);
+
+      if (!workflowData) {
+        ToastService.error("No workflow data found for the provided Task ID.");
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Task Not Found' } });
+        return;
+      }
+
+      // Verify the current user is the Procurement Manager
+      if (workflowData.AssignedTo.EMail.toLowerCase() !== this.state.currentUser.email.toLowerCase()) {
+        this.setState({ modalOverlay: { isOpen: true, Text: 'Access Denied' } });
+        ToastService.error("You are not authorized to access this task as Procurement Manager.");
+        return;
+      }
+
+      // If checks pass
+      this.setState({ userType: "ProcurementManager" });
+      await this.bindMasterDataForProcurementManager(masterid);
+
+    } catch (error) {
+      console.error("Error fetching procurement manager workflow data:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
+      ToastService.error("Failed to fetch workflow data. Please try again later.");
+    }
+  }
+
+  // ✅ IMPROVED: bindMasterDataForProcurementManager with validation
+  public async bindMasterDataForProcurementManager(masterid: any) {
+    let masterdata: any;
+    let itemdetaildataitems: any[] = [];
+
+    const masterqueryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.PRDetailsListName;
+    const select = "*,PRInitiator/ID,PRInitiator/Title,PRInitiator/EMail";
+    const expand = "PRInitiator";
+
+    try {
+      // Fetch master PR data
+      masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
+      console.log("masterdata", masterdata);
+
+      // Fetch WorkflowDetails where ManagerStatus = 'Approved'
+      const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
+        strings.queryList + "WorkflowDetails";
+      const workflowFilter = `PRDetailID eq ${masterid} and ManagerStatus eq 'Approved'`;
+
+      const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
+      console.log("Procurement Manager WorkflowDetails:", workflowDetailsData);
+
+      // 🚨 CRITICAL VALIDATION: No approved items found
+      if (!workflowDetailsData || workflowDetailsData.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Items for Review' }
+        });
+        ToastService.error(
+          "No items have been approved by the Maintenance Manager yet. " +
+          "Please wait for the Maintenance Manager to complete their review before proceeding."
+        );
+        return; // ✅ Stop processing
+      }
+
+      // Create separate row for each approved item
+      workflowDetailsData.forEach((wf: any, index: number) => {
+        itemdetaildataitems.push({
+          index: index + 1,
+          Id: wf.PRItemID,
+          WorkflowDetailsId: wf.Id,
+          Description: wf.Description,
+          ItemCode: wf.ItemCode,
+          Quantity: String(wf.Qty),
+          UOM: wf.UoM,
+          Title: wf.Title,
+          vendors: wf.Vendor || '',
+          Vendor: wf.Vendor,
+          Status: wf.Status,
+          Price: wf.Price || '',
+          Comments: wf.Comments || '',
+          InitiatorStatus: wf.InitiatorStatus,
+          InitiatorComments: wf.InitiatorComments || '',
+          ManagerStatus: wf.ManagerStatus,
+          ManagerComments: wf.ManagerComments || '',
+          TaskID: wf.TaskID
+        });
+      });
+
+      // 🚨 SECONDARY VALIDATION: Ensure items were processed
+      if (itemdetaildataitems.length === 0) {
+        this.setState({
+          modalOverlay: { isOpen: true, Text: 'No Items Available' }
+        });
+        ToastService.error("No items are currently available for procurement manager review.");
+        return;
+      }
+
+      console.log("Final itemDetails for Procurement Manager:", itemdetaildataitems);
+
+      this.setState({
+        masterid: masterid,
+        prNumber: masterdata.PRNumber,
+        department: masterdata.Department,
+        priority: masterdata.Priority,
+        dueDate: masterdata.DueDate,
+        prInitiator: masterdata.PRInitiator.Title,
+        businessJustification: masterdata.BusinessJustification,
+        modalOverlay: { isOpen: false, Text: '' },
+        itemDetails: itemdetaildataitems
+      });
+
+    } catch (error) {
+      console.error("Error fetching procurement manager data:", error);
+      this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
+      ToastService.error("Failed to fetch data. Please try again later.");
+    }
+  }
+
 
   // Handle file selection - append new files to existing ones
   public handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -694,6 +815,30 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ itemDetails: vendorData });
   };
 
+
+
+  // Modified submitRFQDept to include file upload
+  public submitRFQDept = async () => {
+    this.setState({ modalOverlay: { isOpen: true, Text: 'Uploading files and submitting...' } });
+
+    try {
+      // Upload files first
+      const uploadedUrls = await this.uploadFilesToSharePoint();
+      // Store uploaded URLs in state
+      this.setState({ uploadedFileUrls: uploadedUrls });
+      // Then trigger the flow with file URLs included
+      await this.triggerSubmit(uploadedUrls);
+
+      this.setState({
+        modalOverlay: { isOpen: false, Text: '' },
+        selectedFiles: [] // Clear selected files after successful submission
+      });
+    } catch (error) {
+      console.error("Submission error:", error);
+      this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+    }
+  };
+
   // Update triggerSubmit to accept file URLs
   public async triggerSubmit(fileUrls: string[] = []) {
     const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
@@ -729,46 +874,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         console.log("Response from Flow:", responseJSON);
         ToastService.success("RFQ Submitted successfully.");
         this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+        setTimeout(() => this.closeWindow(), 2000);
       }
     }
   }
-
-  // Modified submitRFQDept to include file upload
-  public submitRFQDept = async () => {
-    this.setState({ modalOverlay: { isOpen: true, Text: 'Uploading files and submitting...' } });
-
-    try {
-      // Upload files first
-      const uploadedUrls = await this.uploadFilesToSharePoint();
-      // Store uploaded URLs in state
-      this.setState({ uploadedFileUrls: uploadedUrls });
-      // Then trigger the flow with file URLs included
-      await this.triggerSubmit(uploadedUrls);
-
-      this.setState({
-        modalOverlay: { isOpen: false, Text: '' },
-        selectedFiles: [] // Clear selected files after successful submission
-      });
-    } catch (error) {
-      console.error("Submission error:", error);
-      this.setState({ modalOverlay: { isOpen: false, Text: '' } });
-    }
-  };
-
-  // public handleVendorResponseChange = (itemId: number, field: 'status' | 'price' | 'comments', value: string): void => {
-  //   this.setState(prevState => ({
-  //     vendorResponses: {
-  //       ...prevState.vendorResponses,
-  //       [itemId]: {
-  //         // Preserve all existing fields for this itemId
-  //         ...(prevState.vendorResponses[itemId] || {}),
-  //         // Only update the specific field being changed
-  //         [field]: value
-  //       }
-  //     }
-  //   }));
-  // };
-
 
   public handleVendorResponseChange = (
     itemId: number,
@@ -816,99 +925,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     });
   };
 
-
-  public handleInitiatorResponseChange = (workflowDetailsId: number | null | undefined, field: 'status' | 'comments', value: string): void => {
-    if (!workflowDetailsId) {
-      console.warn("WorkflowDetailsId is null or undefined, cannot save response");
-      return;
-    }
-
-    this.setState(prevState => ({
-      initiatorResponses: {
-        ...prevState.initiatorResponses,
-        [workflowDetailsId]: {
-          ...(prevState.initiatorResponses[workflowDetailsId] || {}),
-          [field]: value
-        }
-      }
-    }));
-  };
-
-  public submitInitiator = async () => {
-    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting Initiator Response...' } });
-
-    await this.triggerInitiatorSubmit();
-
-    this.setState({ modalOverlay: { isOpen: false, Text: '' } });
-  };
-
-
-  public async triggerInitiatorSubmit() {
-    const initiatorFlow = "QatarCement_RFQInitiatorSubmit";
-
-    const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
-      strings.queryList + this.props.wpproperties.FlowConnectionsListName;
-    const filter = `Title eq '${initiatorFlow}'`;
-
-    const laUrl = await this.service.getItemsFilter(queryurl, filter);
-    const postURL = laUrl[0].AppURL;
-
-    const headers = new Headers();
-    headers.append("Content-type", "application/json");
-
-    // Prepare items with initiator technical review responses
-    const itemDetailsWithInitiatorResponse = this.state.itemDetails.map((item) => {
-      const workflowDetailsId = item.WorkflowDetailsId ?? 0; // Use 0 as fallback if null
-
-      return {
-        WorkflowDetailsId: item.WorkflowDetailsId,
-        PRItemID: item.Id,
-        ItemCode: item.ItemCode,
-        Description: item.Description,
-        Quantity: item.Quantity,
-        UOM: item.UOM,
-        Vendor: item.Vendor || '',
-        VendorPrice: item.Price || '',
-        VendorComments: item.Comments || '',
-        TaskID: item.TaskID || '',
-        technicalStatus: this.state.initiatorResponses[workflowDetailsId]?.status || '',
-        technicalComments: this.state.initiatorResponses[workflowDetailsId]?.comments || '',
-      };
-    });
-
-    const body: string = JSON.stringify({
-      'TaskID': String(this.state.taskID),
-      'InitiatorEmail': this.state.currentUser.email,
-      'MasterID': String(this.state.masterid),
-      'ItemDetails': itemDetailsWithInitiatorResponse,
-    });
-
-    console.log("Submitting Initiator Data:", itemDetailsWithInitiatorResponse);
-
-    // try {
-    const response = await this.props.context.httpClient.post(
-      postURL,
-      HttpClient.configurations.v1,
-      { headers, body }
-    );
-
-    const json = await response.json();
-    console.log("Initiator Response:", json);
-
-    if (response.ok) {
-      ToastService.success("Technical review submitted successfully!");
-      // Optionally close the window after successful submission
-      // setTimeout(() => this.closeWindow(), 2000);
-    } else {
-      ToastService.error("Failed to submit technical review. Please try again.");
-    }
-    // } catch (error) {
-    //   console.error("Error submitting initiator data:", error);
-    //   ToastService.error("An error occurred while submitting. Please try again.");
-    // }
-  }
-
-
   public submitVendor = async () => {
     this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting Vendor Response...' } });
 
@@ -917,94 +933,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     this.setState({ modalOverlay: { isOpen: false, Text: '' } });
   };
-
-  // public async triggerVendorSubmit() {
-  //   const vendorFlow = "QatarCement_RFQVendorSubmit";
-
-  //   const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
-  //     strings.queryList + this.props.wpproperties.FlowConnectionsListName;
-  //   const filter = `Title eq '${vendorFlow}'`;
-
-  //   const laUrl = await this.service.getItemsFilter(queryurl, filter);
-  //   const postURL = laUrl[0].AppURL;
-
-  //   const headers = new Headers();
-  //   headers.append("Content-type", "application/json");
-
-  //   const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
-
-  //   const vendorAssignedItems = this.state.itemDetails.filter(item => {
-  //     if (!item.vendors) return false;
-  //     const vendorList = item.vendors.toLowerCase();
-  //     const emails = vendorList.split(/[,;]/).map(e => e.trim());
-  //     return emails.some(email => email === userEmailLower || email.includes(userEmailLower));
-  //   });
-
-  //   // Upload files for each item and collect attachment URLs
-  //   const libraryPath = `${this.props.context.pageContext.web.serverRelativeUrl}/Shared Documents`;
-
-  //   const itemDetailsWithResponses = await Promise.all(
-  //     vendorAssignedItems.map(async (item) => {
-  //       let attachmentUrls: string[] = [];
-
-  //       // Upload files if any exist for this item
-  //       const itemFiles = this.state.vendorResponses[item.Id]?.attachments;
-  //       if (itemFiles && itemFiles.length > 0 && item.WorkflowDetailsId) {
-  //         try {
-  //           const uploadedFiles = await this.service.uploadAndAttachToWorkflowDetails(
-  //             libraryPath,
-  //             item.WorkflowDetailsId,
-  //             itemFiles,
-  //             this.state.masterid,
-  //             item.Id
-  //           );
-  //           attachmentUrls = uploadedFiles.map(f => f.url);
-  //         } catch (error) {
-  //           console.error(`Error uploading files for item ${item.Id}:`, error);
-  //           ToastService.error(`Failed to upload files for item ${item.ItemCode}`);
-  //         }
-  //       }
-
-  //       return {
-  //         ...item,
-  //         WorkflowDetailsId: item.WorkflowDetailsId,
-  //         vendorStatus: this.state.vendorResponses[item.Id]?.status || '',
-  //         vendorPrice: this.state.vendorResponses[item.Id]?.price || '',
-  //         vendorComments: this.state.vendorResponses[item.Id]?.comments || '',
-  //         attachmentUrls: attachmentUrls
-  //       };
-  //     })
-  //   );
-
-  //   const body: string = JSON.stringify({
-  //     'TaskID': String(this.state.taskID),
-  //     'VendorEmail': this.state.currentUser.email,
-  //     'MasterID': String(this.state.masterid),
-  //     'TermsAndConditions': this.state.vendorResponses[0]?.termsAndConditions || '',
-  //     'TechnicalSupport': this.state.vendorResponses[0]?.technicalSupport || '',
-  //     'WarrantySupport': this.state.vendorResponses[0]?.warrantySupport || '',
-  //     'ItemDetails': itemDetailsWithResponses
-  //   });
-
-  //   console.log("Submitting Vendor Data with Attachments:", itemDetailsWithResponses);
-
-  //   const response = await this.props.context.httpClient.post(
-  //     postURL,
-  //     HttpClient.configurations.v1,
-  //     { headers, body }
-  //   );
-
-  //   const json = await response.json();
-  //   console.log("Vendor Response:", json);
-
-  //   if (response.ok) {
-  //     ToastService.success("Vendor response submitted with attachments!");
-  //   } else {
-  //     ToastService.error("Failed to submit vendor response. Please try again.");
-  //   }
-  // }
-
-  // Replace your existing triggerVendorSubmit method with this fixed version:
 
   public async triggerVendorSubmit() {
     const vendorFlow = "QatarCement_RFQVendorSubmit";
@@ -1016,8 +944,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     const laUrl = await this.service.getItemsFilter(queryurl, filter);
     const postURL = laUrl[0].AppURL;
 
-    const headers = new Headers();
-    headers.append("Content-type", "application/json");
+    const requestHeaders: Headers = new Headers();
+    requestHeaders.append("Content-type", "application/json");
 
     const userEmailLower = this.state.currentUser.email.toLowerCase().trim();
 
@@ -1099,27 +1027,125 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     console.log("Submitting Vendor Data to Flow:", JSON.parse(body));
 
+    const postOptions: IHttpClientOptions = {
+      headers: requestHeaders,
+      body: body
+    };
+
     const response = await this.props.context.httpClient.post(
       postURL,
       HttpClient.configurations.v1,
-      { headers, body }
+      postOptions
     );
 
-    const json = await response.json();
-    console.log("Vendor Response from Flow:", json);
+    if (response) {
+      const responseJSON = await response.json();
+      if (response.ok) {
+        console.log("Response from Flow:", responseJSON);
+        ToastService.success("Vendor response submitted successfully!");
+        this.setState({
+          vendorResponses: {},
+          modalOverlay: { isOpen: false, Text: '' }
+        });
+        setTimeout(() => this.closeWindow(), 2000);
+      }
+      else {
+        ToastService.error("Failed to submit vendor response. Please try again.");
+      }
 
-    if (response.ok) {
-      ToastService.success("Vendor response submitted successfully!");
-
-      // Clear vendor responses and files after successful submission
-      this.setState({
-        vendorResponses: {}
-      });
-    } else {
-      ToastService.error("Failed to submit vendor response. Please try again.");
     }
   }
 
+
+  public handleInitiatorResponseChange = (workflowDetailsId: number | null | undefined, field: 'status' | 'comments', value: string): void => {
+    if (!workflowDetailsId) {
+      console.warn("WorkflowDetailsId is null or undefined, cannot save response");
+      return;
+    }
+
+    this.setState(prevState => ({
+      initiatorResponses: {
+        ...prevState.initiatorResponses,
+        [workflowDetailsId]: {
+          ...(prevState.initiatorResponses[workflowDetailsId] || {}),
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  public submitInitiator = async () => {
+    this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting Initiator Response...' } });
+
+    await this.triggerInitiatorSubmit();
+
+    this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+  };
+
+
+  public async triggerInitiatorSubmit() {
+    const flowName = "QatarCement_RFQInitiatorSubmit";
+
+    const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
+      strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+    const filter = "Title eq '" + flowName + "'";
+
+    const laUrl = await this.service.getItemsFilter(queryurl, filter);
+    const postURL = laUrl[0].AppURL;
+
+    const requestHeaders: Headers = new Headers();
+    requestHeaders.append("Content-type", "application/json");
+
+    // Prepare items with initiator technical review responses
+    const itemDetailsWithInitiatorResponse = this.state.itemDetails.map((item) => {
+      const workflowDetailsId = item.WorkflowDetailsId ?? 0; // Use 0 as fallback if null
+
+      return {
+        WorkflowDetailsId: item.WorkflowDetailsId,
+        PRItemID: item.Id,
+        ItemCode: item.ItemCode,
+        Description: item.Description,
+        Quantity: item.Quantity,
+        UOM: item.UOM,
+        Vendor: item.Vendor || '',
+        VendorPrice: item.Price || '',
+        VendorComments: item.Comments || '',
+        TaskID: item.TaskID || '',
+        technicalStatus: this.state.initiatorResponses[workflowDetailsId]?.status || '',
+        technicalComments: this.state.initiatorResponses[workflowDetailsId]?.comments || '',
+      };
+    });
+
+    const body: string = JSON.stringify({
+      'TaskID': String(this.state.taskID),
+      'InitiatorEmail': this.state.currentUser.email,
+      'MasterID': String(this.state.masterid),
+      'ItemDetails': itemDetailsWithInitiatorResponse,
+    });
+
+    console.log("Submitting Initiator Data:", itemDetailsWithInitiatorResponse);
+
+    const postOptions: IHttpClientOptions = {
+      headers: requestHeaders,
+      body: body
+    };
+
+    const response = await this.props.context.httpClient.post(
+      postURL,
+      HttpClient.configurations.v1,
+      postOptions
+    );
+
+    if (response) {
+      const responseJSON = await response.json();
+      if (response.ok) {
+        console.log("Response from Flow:", responseJSON);
+        ToastService.success("Initiator Review Submitted successfully.");
+        this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+        setTimeout(() => this.closeWindow(), 2000);
+      }
+    }
+  }
   public handleMaintenanceManagerResponseChange = (workflowDetailsId: number | null | undefined, field: 'status' | 'comments', value: string): void => {
     if (!workflowDetailsId) {
       console.warn("WorkflowDetailsId is null or undefined, cannot save response");
@@ -1173,8 +1199,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     const laUrl = await this.service.getItemsFilter(queryurl, filter);
     const postURL = laUrl[0].AppURL;
 
-    const headers = new Headers();
-    headers.append("Content-type", "application/json");
+    const requestHeaders: Headers = new Headers();
+    requestHeaders.append("Content-type", "application/json");
 
     const itemDetailsWithManagerResponse = this.state.itemDetails.map((item) => {
       const workflowDetailsId = item.WorkflowDetailsId ?? 0;
@@ -1206,19 +1232,29 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     console.log("Submitting Maintenance Manager Data:", itemDetailsWithManagerResponse);
 
+    const postOptions: IHttpClientOptions = {
+      headers: requestHeaders,
+      body: body
+    };
+
     const response = await this.props.context.httpClient.post(
       postURL,
       HttpClient.configurations.v1,
-      { headers, body }
+      postOptions
     );
 
-    const json = await response.json();
-    console.log("Maintenance Manager Response:", json);
-
-    if (response.ok) {
-      ToastService.success("Maintenance Manager review submitted successfully!");
-    } else {
-      ToastService.error("Failed to submit maintenance manager review. Please try again.");
+    if (response) {
+      console.log("Maintenance Manager Response:", response);
+      
+      const responseJSON = await response.json();
+      if (response.ok) {
+        console.log("Response from Flow:", responseJSON);
+        ToastService.success("Maintenance Manager Submitted successfully.");
+        this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+        setTimeout(() => this.closeWindow(), 2000);
+      } else {
+        ToastService.error("Failed to submit maintenance manager review. Please try again.");
+      }
     }
   }
 
