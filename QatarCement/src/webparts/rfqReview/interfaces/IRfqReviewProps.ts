@@ -13,7 +13,7 @@ export interface IRfqReviewWebPartProps {
   vendorListName: string;
   FlowConnectionsListName: string;
   WorkflowTasksListName: string;
-  DocumentLibraryName: string; 
+  DocumentLibraryName: string;
 }
 
 export interface IVendorResponse {
@@ -28,11 +28,11 @@ export interface IVendorResponse {
 export interface IVendorResponseInput {
   status?: string;
   price?: string;
-  comments?: string; 
+  comments?: string;
   termsAndConditions?: string;
   technicalSupport?: string;
   warrantySupport?: string;
-  attachments?: File[]; 
+  attachments?: File[];
 }
 
 export interface IInitiatorResponse {
@@ -73,19 +73,23 @@ export interface IRfqReviewState {
   vendorOptions: IDropdownOption[];
   masterid: string;
   taskID: any;
-  vendorResponses: Record<number, IVendorResponseInput>; 
-  initiatorResponses: Record<number, IInitiatorResponse>; 
+  vendorResponses: Record<number, IVendorResponseInput>;
+  initiatorResponses: Record<number, IInitiatorResponse>;
   managerResponses: Record<number, IManagerResponse>;
   procurementManagerResponses: Record<number, IProcurementManagerResponse>;
   selectedFiles: File[];
   uploadedFileUrls: string[];
   attachments: IAttachment[];
   isLoadingAttachments: boolean;
+  commonManagerStatus: string;
+  commonManagerComments: string;
+  commonProcurementStatus: string;
+  commonProcurementComments: string;
 }
 
 export interface IItemData {
   index: number;
-  Id: number ;
+  Id: number;
   Description: string;
   ItemCode: string;
   Quantity: string;

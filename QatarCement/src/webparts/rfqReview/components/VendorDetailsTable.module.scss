@@ -1,0 +1,248 @@
+@import '~@fluentui/react/dist/sass/References.scss';
+
+.container {
+  font-family: Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.formpopup {
+  width: 100%;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.formheader {
+  background: #112967;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  position: relative;
+}
+
+.formtitle {
+  color: #fff;
+  font-size: 24px;
+}
+
+.formbody {
+  margin: 24px;
+}
+
+.row {
+  display: flex;
+  margin-bottom: 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+
+}
+
+.col6 {
+  flex: 0 0 calc(50% - 7px);
+}
+
+.col4 {
+  flex: 0 0 calc(33.333% - 7px);
+}
+
+.col12 {
+  flex: 1 1 0%;
+  min-width: 0; // ✅ ADD THIS - Allows flex items to shrink below content size
+  width: 100%;
+}
+
+.doctable {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  display: block;
+  margin-bottom: 16px; // Add some spacing
+
+  /* Custom scrollbar styling for better visibility */
+  &::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+}
+
+.table {
+  min-width: 1800px; // ✅ INCREASED - Make sure this exceeds typical screen width
+  width: max-content;
+  border-collapse: collapse;
+  table-layout: auto; // ✅ CHANGED from 'fixed' to 'auto' for better flexibility
+  display: table;
+  margin: 0; // Remove any default margins
+}
+
+.tr {
+  border: 1px solid #ccc;
+  /* Adds border between rows */
+}
+
+.th {
+  border: 1px solid #ccc;
+  padding: 10px 8px !important;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Fixed width for columns */
+/* Sl No */
+.table tr th:nth-child(1),
+.table tr td:nth-child(1) {
+  min-width: 25px;
+  width: 25px;
+  text-align: center;
+}
+
+/* Item Code */
+.table tr th:nth-child(2),
+.table tr td:nth-child(2) {
+  width: 70px;
+  min-width: 70px;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: center;
+}
+
+/* Description */
+.table tr th:nth-child(3),
+.table tr td:nth-child(3) {
+  width: 115px;
+  min-width: 115px;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: center;
+}
+
+
+
+/* Quantity */
+.table tr th:nth-child(4),
+.table tr td:nth-child(4) {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* UOM */
+.table tr th:nth-child(5),
+.table tr td:nth-child(5) {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.table tr th:nth-child(6),
+/* Status */
+.table tr td:nth-child(6) {
+  width: 70px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.table tr th:nth-child(7),
+/* Unit Price */
+.table tr td:nth-child(7) {
+  width: 70px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.table tr th:nth-child(8),
+/* Total Price */
+.table tr td:nth-child(8) {
+  width: 80px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.table tr th:nth-child(9),
+/* Comments */
+.table tr td:nth-child(9) {
+  width: 100px;
+  /* Wider for multiline comments */
+  text-align: center;
+}
+
+.table tr th:nth-child(10),
+/* Attachments */
+.table tr td:nth-child(10) {
+  width: 70px;
+  /* Space for file list and button */
+  text-align: center;
+}
+
+
+.vendorCell {
+  // max-width: 220px;
+  width: 100%;
+  text-align: center;
+}
+
+.rgtalign {
+  margin-top: 5px;
+  width: 100%;
+  text-align: right;
+}
+
+.btn {
+  margin-right: 5px;
+  border-radius: 5px;
+  border: 1px solid gray;
+  margin-bottom: 5px;
+}
+
+// Zebra striping for better readability
+.table tbody tr:nth-child(even) td {
+  background-color: rgba(0, 0, 0, 0.2);
+  /* 0.5 = 50% opacity; adjust as needed (0 = fully transparent, 1 = fully opaque) */
+}
+
+
+.table tbody tr.tr:nth-child(odd) td {
+  background-color: #ffffff;
+}
+
+// Hover effect - increase specificity
+.table tbody tr.tr:hover td {
+  background-color: #cbd8ef;
+  transition: background-color 0.2s ease;
+}
+
+// Ensure header stays consistent
+.table thead tr {
+  background-color: #112967;
+  color: white;
+}
+
+.table thead th {
+  background-color: #112967;
+  color: white;
+  font-weight: 600;
+}

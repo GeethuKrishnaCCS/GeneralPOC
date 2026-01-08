@@ -12,6 +12,7 @@ import RFQDeptDetailsTable from './RFQDeptDetailsTable';
 import VendorDetailsTable from './VendorDetailsTable';
 import InitiatorDetailsTable from './InitiatorDetailsTable';
 import ManagerDetailsTable from './ManagerDetailsTable';
+import ProcurementManagerDetailsTable from './ProcurementManagerDetailsTable';
 
 
 export default class RfqReview extends React.Component<IRfqReviewProps, IRfqReviewState, {}> {
@@ -42,7 +43,11 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       selectedFiles: [],
       uploadedFileUrls: [],
       attachments: [],
-      isLoadingAttachments: false
+      isLoadingAttachments: false,
+      commonManagerStatus: '',
+      commonManagerComments: '',
+      commonProcurementStatus: '',
+      commonProcurementComments: '',
     };
 
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
@@ -54,6 +59,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.handleChange = this.handleChange.bind(this);
     this.triggerSubmit = this.triggerSubmit.bind(this);
     this.submitRFQDept = this.submitRFQDept.bind(this);
+    this.handleCommonManagerStatusChange = this.handleCommonManagerStatusChange.bind(this);
+    this.handleCommonManagerCommentsChange = this.handleCommonManagerCommentsChange.bind(this);
+    this.handleCommonProcurementStatusChange = this.handleCommonProcurementStatusChange.bind(this);
+    this.handleCommonProcurementCommentsChange = this.handleCommonProcurementCommentsChange.bind(this);
     this.handleVendorResponseChange = this.handleVendorResponseChange.bind(this);
     this.submitVendor = this.submitVendor.bind(this);
     this.triggerVendorSubmit = this.triggerVendorSubmit.bind(this);
@@ -530,7 +539,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       // Fetch WorkflowDetails where InitiatorStatus = 'Technically Accepted'
       const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
         strings.queryList + "WorkflowDetails";
-      const workflowFilter = `PRDetailID eq ${masterid} and InitiatorStatus eq 'Technically Accepted'`;
+      const workflowFilter = `PRDetailID eq ${masterid}`;
+      // const workflowFilter = `PRDetailID eq ${masterid} and InitiatorStatus eq 'Technically Accepted'`;
 
       const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
       console.log("Maintenance Manager WorkflowDetails:", workflowDetailsData);
@@ -669,7 +679,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       // Fetch WorkflowDetails where ManagerStatus = 'Approved'
       const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
         strings.queryList + "WorkflowDetails";
-      const workflowFilter = `PRDetailID eq ${masterid} and ManagerStatus eq 'Approved'`;
+      const workflowFilter = `PRDetailID eq ${masterid} and MaintenanceManagerStatus eq 'Approved'`;
 
       const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
       console.log("Procurement Manager WorkflowDetails:", workflowDetailsData);
@@ -704,8 +714,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
           Comments: wf.Comments || '',
           InitiatorStatus: wf.InitiatorStatus,
           InitiatorComments: wf.InitiatorComments || '',
-          ManagerStatus: wf.ManagerStatus,
-          ManagerComments: wf.ManagerComments || '',
+          ManagerStatus: wf.MaintenanceManagerStatus,
+          ManagerComments: wf.MaintenanceManagerComments || '',
           TaskID: wf.TaskID
         });
       });
@@ -875,6 +885,9 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         ToastService.success("RFQ Submitted successfully.");
         this.setState({ modalOverlay: { isOpen: false, Text: '' } });
         setTimeout(() => this.closeWindow(), 2000);
+      }
+      else {
+        ToastService.error("Failed to submit review. Please try again.");
       }
     }
   }
@@ -1134,7 +1147,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       postURL,
       HttpClient.configurations.v1,
       postOptions
-    ); 
+    );
 
     if (response) {
       const responseJSON = await response.json();
@@ -1143,6 +1156,9 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         ToastService.success("Initiator Review Submitted successfully.");
         this.setState({ modalOverlay: { isOpen: false, Text: '' } });
         setTimeout(() => this.closeWindow(), 2000);
+      }
+      else {
+        ToastService.error("Failed to submit initiator review. Please try again.");
       }
     }
   }
@@ -1161,6 +1177,16 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         }
       }
     }));
+  };
+
+  // Handler for common manager status
+  public handleCommonManagerStatusChange = (value: string): void => {
+    this.setState({ commonManagerStatus: value });
+  };
+
+  // Handler for common manager comments
+  public handleCommonManagerCommentsChange = (value: string): void => {
+    this.setState({ commonManagerComments: value });
   };
 
   // Procurement Manager Response Handler
@@ -1188,7 +1214,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.setState({ modalOverlay: { isOpen: false, Text: '' } });
   };
 
-  // Trigger Manager Submit
+
   public async triggerMaintenanceManagerSubmit() {
     const managerFlow = "QatarCement_RFQMaintenanceManagerSubmit";
 
@@ -1218,8 +1244,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         InitiatorStatus: item.InitiatorStatus || '',
         InitiatorComments: item.InitiatorComments || '',
         TaskID: item.TaskID || '',
-        MaintenanceManagerStatus: this.state.managerResponses[workflowDetailsId]?.status || '',
-        MaintenanceManagerComments: this.state.managerResponses[workflowDetailsId]?.comments || '',
+        MaintenanceManagerStatus: this.state.commonManagerStatus, // ✅ Use common status
+        MaintenanceManagerComments: this.state.managerResponses[workflowDetailsId]?.comments || '', // ✅ Per-item comments
       };
     });
 
@@ -1227,6 +1253,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       'TaskID': String(this.state.taskID),
       'ManagerEmail': this.state.currentUser.email,
       'MasterID': String(this.state.masterid),
+      'CommonManagerStatus': this.state.commonManagerStatus, // ✅ Add common status
+      'CommonManagerComments': this.state.commonManagerComments, // ✅ Add common comments
       'ItemDetails': itemDetailsWithManagerResponse,
     });
 
@@ -1245,7 +1273,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     if (response) {
       console.log("Maintenance Manager Response:", response);
-      
+
       const responseJSON = await response.json();
       if (response.ok) {
         console.log("Response from Flow:", responseJSON);
@@ -1257,7 +1285,15 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       }
     }
   }
+  // Handler for common procurement status
+  public handleCommonProcurementStatusChange = (value: string): void => {
+    this.setState({ commonProcurementStatus: value });
+  };
 
+  // Handler for common procurement comments
+  public handleCommonProcurementCommentsChange = (value: string): void => {
+    this.setState({ commonProcurementComments: value });
+  };
   // Submit Procurement Manager
   public submitProcurementManager = async () => {
     this.setState({ modalOverlay: { isOpen: true, Text: 'Submitting Procurement Manager Response...' } });
@@ -1266,6 +1302,77 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
   };
 
   // Trigger Procurement Manager Submit
+  // public async triggerProcurementManagerSubmit() {
+  //   const procurementManagerFlow = "QatarCement_RFQProcurementManagerSubmit";
+
+  //   const queryurl = this.props.context.pageContext.web.serverRelativeUrl +
+  //     strings.queryList + this.props.wpproperties.FlowConnectionsListName;
+  //   const filter = `Title eq '${procurementManagerFlow}'`;
+
+  //   const laUrl = await this.service.getItemsFilter(queryurl, filter);
+  //   const postURL = laUrl[0].AppURL;
+
+  //   const requestHeaders: Headers = new Headers();
+  //   requestHeaders.append("Content-type", "application/json");
+
+  //   const itemDetailsWithProcurementManagerResponse = this.state.itemDetails.map((item) => {
+  //     const workflowDetailsId = item.WorkflowDetailsId ?? 0;
+
+  //     return {
+  //       WorkflowDetailsId: item.WorkflowDetailsId,
+  //       PRItemID: item.Id,
+  //       ItemCode: item.ItemCode,
+  //       Description: item.Description,
+  //       Quantity: item.Quantity,
+  //       UOM: item.UOM,
+  //       Vendor: item.Vendor || '',
+  //       VendorPrice: item.Price || '',
+  //       VendorComments: item.Comments || '',
+  //       InitiatorStatus: item.InitiatorStatus || '',
+  //       InitiatorComments: item.InitiatorComments || '',
+  //       ManagerStatus: item.ManagerStatus || '',
+  //       ManagerComments: item.ManagerComments || '',
+  //       TaskID: item.TaskID || '',
+  //       procurementManagerStatus: this.state.procurementManagerResponses[workflowDetailsId]?.status || '',
+  //       procurementManagerComments: this.state.procurementManagerResponses[workflowDetailsId]?.comments || '',
+  //     };
+  //   });
+
+  //   const body: string = JSON.stringify({
+  //     'TaskID': String(this.state.taskID),
+  //     'ProcurementManagerEmail': this.state.currentUser.email,
+  //     'MasterID': String(this.state.masterid),
+  //     'ItemDetails': itemDetailsWithProcurementManagerResponse,
+  //   });
+
+  //   console.log("Submitting Procurement Manager Data:", itemDetailsWithProcurementManagerResponse);
+
+  //   const postOptions: IHttpClientOptions = {
+  //     headers: requestHeaders,
+  //     body: body
+  //   };
+
+  //   const response = await this.props.context.httpClient.post(
+  //     postURL,
+  //     HttpClient.configurations.v1,
+  //     postOptions
+  //   );
+
+  //   if (response) {
+  //     console.log("Procurement Manager Response:", response);
+
+  //     const responseJSON = await response.json();
+  //     if (response.ok) {
+  //       console.log("Response from Flow:", responseJSON);
+  //       ToastService.success("Procurement Manager Submitted successfully.");
+  //       this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+  //       setTimeout(() => this.closeWindow(), 2000);
+  //     } else {
+  //       ToastService.error("Failed to submit procurement manager review. Please try again.");
+  //     }
+  //   }
+  // }
+
   public async triggerProcurementManagerSubmit() {
     const procurementManagerFlow = "QatarCement_RFQProcurementManagerSubmit";
 
@@ -1276,8 +1383,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     const laUrl = await this.service.getItemsFilter(queryurl, filter);
     const postURL = laUrl[0].AppURL;
 
-    const headers = new Headers();
-    headers.append("Content-type", "application/json");
+    const requestHeaders: Headers = new Headers();
+    requestHeaders.append("Content-type", "application/json");
 
     const itemDetailsWithProcurementManagerResponse = this.state.itemDetails.map((item) => {
       const workflowDetailsId = item.WorkflowDetailsId ?? 0;
@@ -1297,8 +1404,8 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         ManagerStatus: item.ManagerStatus || '',
         ManagerComments: item.ManagerComments || '',
         TaskID: item.TaskID || '',
-        procurementManagerStatus: this.state.procurementManagerResponses[workflowDetailsId]?.status || '',
-        procurementManagerComments: this.state.procurementManagerResponses[workflowDetailsId]?.comments || '',
+        procurementManagerStatus: this.state.commonProcurementStatus, // ✅ Use common status
+        procurementManagerComments: this.state.procurementManagerResponses[workflowDetailsId]?.comments || '', // ✅ Per-item comments
       };
     });
 
@@ -1306,24 +1413,36 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       'TaskID': String(this.state.taskID),
       'ProcurementManagerEmail': this.state.currentUser.email,
       'MasterID': String(this.state.masterid),
+      'CommonProcurementStatus': this.state.commonProcurementStatus, // ✅ Add common status
+      'CommonProcurementComments': this.state.commonProcurementComments, // ✅ Add common comments
       'ItemDetails': itemDetailsWithProcurementManagerResponse,
     });
 
     console.log("Submitting Procurement Manager Data:", itemDetailsWithProcurementManagerResponse);
 
+    const postOptions: IHttpClientOptions = {
+      headers: requestHeaders,
+      body: body
+    };
+
     const response = await this.props.context.httpClient.post(
       postURL,
       HttpClient.configurations.v1,
-      { headers, body }
+      postOptions
     );
 
-    const json = await response.json();
-    console.log("Procurement Manager Response:", json);
+    if (response) {
+      console.log("Procurement Manager Response:", response);
 
-    if (response.ok) {
-      ToastService.success("Procurement Manager review submitted successfully!");
-    } else {
-      ToastService.error("Failed to submit procurement manager review. Please try again.");
+      const responseJSON = await response.json();
+      if (response.ok) {
+        console.log("Response from Flow:", responseJSON);
+        ToastService.success("Procurement Manager Submitted successfully.");
+        this.setState({ modalOverlay: { isOpen: false, Text: '' } });
+        setTimeout(() => this.closeWindow(), 2000);
+      } else {
+        ToastService.error("Failed to submit procurement manager review. Please try again.");
+      }
     }
   }
 
@@ -1426,24 +1545,32 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 masterid={this.state.masterid}
                 taskID={this.state.taskID}
                 managerResponses={this.state.managerResponses}
+                commonManagerStatus={this.state.commonManagerStatus}
+                commonManagerComments={this.state.commonManagerComments}
                 onResponseChange={this.handleMaintenanceManagerResponseChange}
+                onCommonStatusChange={this.handleCommonManagerStatusChange}
+                onCommonCommentsChange={this.handleCommonManagerCommentsChange}
                 onSubmitManager={this.submitMaintenanceManager}
                 onCancel={this.closeWindow}
               />
             )}
 
             {/* Procurement Manager View */}
-            {/* {this.state.userType === "ProcurementManager" && (
+            {this.state.userType === "ProcurementManager" && (
               <ProcurementManagerDetailsTable
                 itemDetails={this.state.itemDetails}
                 masterid={this.state.masterid}
                 taskID={this.state.taskID}
                 procurementManagerResponses={this.state.procurementManagerResponses}
+                commonProcurementStatus={this.state.commonProcurementStatus}
+                commonProcurementComments={this.state.commonProcurementComments}
                 onResponseChange={this.handleProcurementManagerResponseChange}
+                onCommonStatusChange={this.handleCommonProcurementStatusChange}
+                onCommonCommentsChange={this.handleCommonProcurementCommentsChange}
                 onSubmitProcurementManager={this.submitProcurementManager}
                 onCancel={this.closeWindow}
               />
-            )} */}
+            )}
           </div>
         </div>
         {ToastService.container()}

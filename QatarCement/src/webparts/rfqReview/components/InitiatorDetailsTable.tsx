@@ -1,5 +1,5 @@
 import * as React from 'react';
-import styles from './RfqReview.module.scss';
+import styles from './InitiatorDetailsTable.module.scss';
 import { Dropdown, IDropdownOption, PrimaryButton, DefaultButton, TextField } from '@fluentui/react';
 
 interface IInitiatorDetailsTableProps {
@@ -35,12 +35,12 @@ const InitiatorDetailsTable: React.FC<IInitiatorDetailsTableProps> = ({
                                 <th className={styles.th}>S.No</th>
                                 <th className={styles.th}>Item Code</th>
                                 <th className={styles.th}>Description</th>
-                                <th className={styles.th}>Quantity</th>
+                                <th className={styles.th}>Qty</th>
                                 <th className={styles.th}>UOM</th>
                                 <th className={styles.th}>Vendor</th>
                                 <th className={styles.th}>Vendor Status</th>
                                 <th className={styles.th}>Vendor Comments</th>
-                                <th className={styles.th}>Technical Status</th>
+                                <th className={styles.th}>Technical Action</th>
                                 <th className={styles.th}>Technical Comments</th>
                             </tr>
                         </thead>

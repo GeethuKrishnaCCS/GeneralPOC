@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Dropdown, PrimaryButton, TextField, TooltipHost, Icon, Link, IconButton } from '@fluentui/react';
-import styles from './RfqReview.module.scss';
+import styles from './VendorDetailsTable.module.scss';
 
 interface IItemDetails {
     ItemCode: string;
@@ -85,14 +85,23 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({
             const existingFiles = vendorResponses[itemId]?.attachments || [];
             onFileChange(itemId, [...existingFiles, ...fileArray]);
         }
-        // Reset input to allow selecting the same file again
         event.target.value = '';
     };
 
-    const calculateTotal = (): number => {
+    // ✅ UPDATED: Calculate item total (Quantity × Price)
+    const calculateItemTotal = (item: IItemDetails): number => {
+        const quantity = parseFloat(item.Quantity || '0');
+        const price = parseFloat(vendorResponses[item.Id]?.price || '0');
+        
+        if (isNaN(quantity) || isNaN(price)) return 0;
+        
+        return quantity * price;
+    };
+
+    // ✅ UPDATED: Calculate grand total (sum of all item totals)
+    const calculateGrandTotal = (): number => {
         return filteredItems.reduce((total, item) => {
-            const price = parseFloat(vendorResponses[item.Id]?.price || '0');
-            return total + (isNaN(price) ? 0 : price);
+            return total + calculateItemTotal(item);
         }, 0);
     };
 
@@ -245,7 +254,8 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({
                                     <th className={styles.th}>Quantity</th>
                                     <th className={styles.th}>UOM</th>
                                     <th className={styles.th}>Status</th>
-                                    <th className={styles.th}>Price</th>
+                                    <th className={styles.th}>Unit Price</th>
+                                    <th className={styles.th}>Total Price</th>
                                     <th className={styles.th}>Comments</th>
                                     <th className={styles.th}>Attachments</th>
                                 </tr>
@@ -255,18 +265,18 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({
                                     <tr key={item.ItemCode + index} className={styles.tr}>
                                         <td className={styles.th}>{index + 1}</td>
                                         <td className={styles.th}>
-                                            <TextField value={item.ItemCode || ''} readOnly />
+                                            <TextField value={item.ItemCode || ''} readOnly disabled />
                                         </td>
                                         <td className={styles.th}>
                                             <TooltipHost content={item.Description}>
-                                                <TextField value={item.Description || ''} readOnly />
+                                                <TextField value={item.Description || ''} readOnly disabled />
                                             </TooltipHost>
                                         </td>
                                         <td className={styles.th}>
-                                            <TextField value={item.Quantity || ''} readOnly />
+                                            <TextField value={item.Quantity || ''} readOnly disabled />
                                         </td>
                                         <td className={styles.th}>
-                                            <TextField value={item.UOM || ''} readOnly />
+                                            <TextField value={item.UOM || ''} readOnly disabled />
                                         </td>
                                         <td className={styles.th}>
                                             <Dropdown
@@ -278,10 +288,23 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({
                                         </td>
                                         <td className={styles.th}>
                                             <TextField
-                                                placeholder='Enter price'
+                                                placeholder='Enter unit price'
                                                 value={vendorResponses[item.Id]?.price || ''}
                                                 onChange={(e, newValue) => handlePriceChange(e, newValue!, item.Id)}
                                                 type="number"
+                                            />
+                                        </td>
+                                        {/* ✅ NEW: Total Price Column (Quantity × Unit Price) */}
+                                        <td className={styles.th}>
+                                            <TextField
+                                                value={calculateItemTotal(item).toFixed(2)}
+                                                readOnly
+                                                styles={{
+                                                    field: {
+                                                        backgroundColor: '#f3f2f1',
+                                                        fontWeight: 600
+                                                    }
+                                                }}
                                             />
                                         </td>
                                         <td className={styles.th}>
@@ -309,7 +332,7 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({
                                                     }}
                                                 >
                                                     <Icon iconName="Attach" style={{ marginRight: '5px' }} />
-                                                    Choose Files
+                                                    {/* Choose Files */}
                                                 </label>
                                                 <input
                                                     id={`file-upload-${item.Id}`}
@@ -367,17 +390,18 @@ const VendorDetailsTable: React.FC<IVendorDetailsTableProps> = ({
                             </tbody>
                             <tfoot>
                                 <tr className={styles.tr}>
-                                    <td className={styles.th} colSpan={6} style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                                        Total:
+                                    <td className={styles.th} colSpan={7} style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                        Grand Total:
                                     </td>
                                     <td className={styles.th}>
                                         <TextField
-                                            value={calculateTotal().toFixed(2)}
+                                            value={calculateGrandTotal().toFixed(2)}
                                             readOnly
                                             styles={{
                                                 field: {
                                                     fontWeight: 'bold',
-                                                    backgroundColor: '#f3f3f3'
+                                                    backgroundColor: '#e6f7ff',
+                                                    fontSize: '16px'
                                                 }
                                             }}
                                         />

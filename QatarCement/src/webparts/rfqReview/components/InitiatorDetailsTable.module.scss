@@ -55,6 +55,8 @@
 
 .doctable {
   width: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
@@ -69,38 +71,40 @@
   /* Adds border between rows */
 }
 
-.td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: left;
-  overflow: hidden;
-}
-
 .th {
   border: 1px solid #ccc;
-  padding: 8px;
+  /* Adds border between columns */
+  padding: 6px 8px;
+  /* Adds padding for better readability */
   text-align: left;
+  /* Aligns text to the left */
   overflow: hidden;
+  vertical-align: top ;
 }
 
 /* Fixed width for columns */
 /* Sl No */
 .table tr th:nth-child(1),
 .table tr td:nth-child(1) {
-  max-width: 3em;
-  width: 3em;
+  max-width: 25px;
+  width: 25px;
+  text-align: center;
 }
 
 /* Item Code */
 .table tr th:nth-child(2),
 .table tr td:nth-child(2) {
-  width: 10em
+  width: 70px;
+  max-width: 70px;
 }
 
 /* Description */
 .table tr th:nth-child(3),
 .table tr td:nth-child(3) {
-  width: 20em;
+  width: 115px;
+  max-width: 115px;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 
@@ -108,13 +112,17 @@
 /* Quantity */
 .table tr th:nth-child(4),
 .table tr td:nth-child(4) {
-  width: 5em;
+  width: 50px;
+  max-width: 50px;
+  text-align: center;
 }
 
 /* UOM */
 .table tr th:nth-child(5),
 .table tr td:nth-child(5) {
-  width: 8em;
+  width: 50px;
+  max-width: 50px;
+  text-align: center;
 }
 
 /* Vendors column → max width + wrap */
@@ -124,6 +132,33 @@
   max-width: 250px;
   white-space: normal;
   word-wrap: break-word;
+}
+
+/* Vendor Status & Comments */
+.table tr th:nth-child(7),
+.table tr td:nth-child(7),
+.table tr th:nth-child(8),
+.table tr td:nth-child(8) {
+  width: 100px;
+  max-width: 100px;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+/* Technical Status (Dropdown) */
+.table tr th:nth-child(9),
+.table tr td:nth-child(9) {
+  width: 170px;
+  /* Enough for the dropdown */
+  min-width: 150px;
+}
+
+/* Technical Comments (TextField) */
+.table tr th:nth-child(10),
+.table tr td:nth-child(10) {
+  width: 200px;
+  /* Gives space for multiline comments */
+  min-width: 180px;
 }
 
 .vendorCell {
@@ -155,7 +190,7 @@
 
 // Hover effect - increase specificity
 .table tbody tr.tr:hover td {
-  background-color: #cbd8ef;;
+  background-color: #cbd8ef;
   transition: background-color 0.2s ease;
 }
 

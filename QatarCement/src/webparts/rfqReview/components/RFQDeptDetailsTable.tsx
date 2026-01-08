@@ -21,11 +21,11 @@ interface IRFQDeptDetailsTableProps {
     onRemoveFile: (index: number) => void;
 }
 
-const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({ 
-    itemDetails, 
-    vendorOptions, 
-    handleChange, 
-    onSubmitRFQDept, 
+const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
+    itemDetails,
+    vendorOptions,
+    handleChange,
+    onSubmitRFQDept,
     onCancel,
     selectedFiles,
     onFileSelect,
@@ -67,18 +67,18 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                                         <tr key={key} className={styles.tr}>
                                             <td className={styles.th}>{key + 1}</td>
                                             <td className={styles.th}>
-                                                <TextField value={item.ItemCode} readOnly />
+                                                <TextField value={item.ItemCode} readOnly disabled />
                                             </td>
                                             <td className={styles.th}>
                                                 <TooltipHost content={item.Description}>
-                                                    <TextField value={item.Description} readOnly />
+                                                    <TextField value={item.Description} readOnly disabled />
                                                 </TooltipHost>
                                             </td>
                                             <td className={styles.th}>
-                                                <TextField value={item.Quantity} readOnly />
+                                                <TextField value={item.Quantity} readOnly disabled />
                                             </td>
                                             <td className={styles.th}>
-                                                <TextField value={item.UOM} readOnly />
+                                                <TextField value={item.UOM} readOnly disabled />
                                             </td>
                                             <td className={styles.th}>
                                                 <div className={styles.vendorCell}>
@@ -104,6 +104,8 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                                         </tr>
                                     ))}
                                 </tbody>
+
+                                
                             </table>
                         </div>
                     )}
@@ -115,7 +117,7 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                 <div className={styles.col12}>
                     <div style={{ marginTop: '20px', marginBottom: '20px' }}>
                         <h4 style={{ marginBottom: '10px' }}>Attachments</h4>
-                        
+
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -124,7 +126,7 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                             style={{ display: 'none' }}
                             accept="*/*"
                         />
-                        
+
                         <PrimaryButton
                             text="Select Files"
                             iconProps={{ iconName: 'Attach' }}
@@ -133,14 +135,14 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                         />
 
                         {selectedFiles.length > 0 && (
-                            <div style={{ 
-                                marginTop: '15px', 
-                                border: '1px solid #ddd', 
+                            <div style={{
+                                marginTop: '15px',
+                                border: '1px solid #ddd',
                                 borderRadius: '4px',
                                 padding: '10px'
                             }}>
-                                <div style={{ 
-                                    fontWeight: 600, 
+                                <div style={{
+                                    fontWeight: 600,
                                     marginBottom: '10px',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -149,12 +151,12 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                                     <Icon iconName="Attach" />
                                     <span>Selected Files ({selectedFiles.length})</span>
                                 </div>
-                                
+
                                 {selectedFiles.map((file, index) => (
-                                    <div 
-                                        key={index} 
-                                        style={{ 
-                                            display: 'flex', 
+                                    <div
+                                        key={index}
+                                        style={{
+                                            display: 'flex',
                                             justifyContent: 'space-between',
                                             alignItems: 'center',
                                             padding: '8px',
@@ -163,21 +165,21 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                                             marginBottom: '5px'
                                         }}
                                     >
-                                        <div style={{ 
-                                            display: 'flex', 
+                                        <div style={{
+                                            display: 'flex',
                                             alignItems: 'center',
                                             gap: '8px',
                                             flex: 1
                                         }}>
                                             <Icon iconName="Page" style={{ color: '#0078d4' }} />
-                                            <span style={{ 
+                                            <span style={{
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap'
                                             }}>
                                                 {file.name}
                                             </span>
-                                            <span style={{ 
+                                            <span style={{
                                                 color: '#666',
                                                 fontSize: '12px',
                                                 whiteSpace: 'nowrap'
@@ -191,11 +193,11 @@ const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
                                             ariaLabel="Remove file"
                                             onClick={() => onRemoveFile(index)}
                                             styles={{
-                                                root: { 
+                                                root: {
                                                     color: '#a4262c',
                                                     marginLeft: '10px'
                                                 },
-                                                rootHovered: { 
+                                                rootHovered: {
                                                     color: '#750b1c',
                                                     backgroundColor: '#fef0f1'
                                                 }
