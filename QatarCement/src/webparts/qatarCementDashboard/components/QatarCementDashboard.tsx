@@ -1,106 +1,64 @@
 import * as React from 'react';
-
 import styles from './QatarCementDashboard.module.scss';
-
 import type {
-
   IQatarCementDashboardProps,
-
   IQatarCementDashboardState
-
 } from '../interfaces/IQatarCementDashboardProps';
-import * as XLSX from 'xlsx';
 
+import * as XLSX from 'xlsx';
+import * as _ from 'lodash';
 
 import { QatarCementDashboardService } from '../services/QatarCementDashboardService';
-
 import ModalOverlay from '../../../shared/controls/Overlay/Overlay';
 
 import {
-
   DetailsList,
-
   DetailsListLayoutMode,
-
   SelectionMode,
-
   IColumn,
   DetailsRow,
   IDetailsRowProps
-
 } from '@fluentui/react/lib/DetailsList';
 
-import * as _ from 'lodash';
-
 interface QatarCementDashboardStateWithExpand
-
   extends IQatarCementDashboardState {
-
   listItems?: any[];
-
   groups?: any[];
-
 }
 
 export default class QatarCementDashboard extends React.Component<
-
   IQatarCementDashboardProps,
-
   QatarCementDashboardStateWithExpand
 > {
-
   private service: QatarCementDashboardService;
 
   constructor(props: IQatarCementDashboardProps) {
-
     super(props);
 
     this.state = {
-
       listItems: [],
-
       groups: [],
-
       modalOverlay: {
-
         isOpen: false,
-
         Text: ''
-
       }
-
     };
 
     this.service = new QatarCementDashboardService(
-
       this.props.context,
-
       this.props.context.pageContext.web.absoluteUrl
-
     );
-
   }
 
   public async componentDidMount(): Promise<void> {
-
     this.setState({ modalOverlay: { isOpen: true, Text: 'Loading...' } });
-
     await this.getPRDetailsAndItems();
-
     this.setState({ modalOverlay: { isOpen: false, Text: '' } });
-
   }
 
-  /**
-
-   * CORE LOGIC – PR → Item Code → Individual Rows
-
-   */
-
-  // ...existing code...
-  /**
-   * CORE LOGIC – PR → Item Code → Individual Rows
-   */
+  /* =====================================================
+     CORE LOGIC – PR → ItemCode → Items
+     ===================================================== */
   private async getPRDetailsAndItems(): Promise<void> {
     const prDetailsListName =
       this.props.wpproperties?.PRDetailsListName || 'PRDetails';
@@ -126,7 +84,7 @@ export default class QatarCementDashboard extends React.Component<
       prDetailsId: i.PRDetailID
     }));
 
-    const combinedItems: any[] = []; // only actual item rows live here (no placeholders)
+    const combinedItems: any[] = [];
     const groups: any[] = [];
     let startIndex = 0;
 
@@ -137,306 +95,126 @@ export default class QatarCementDashboard extends React.Component<
 
       if (!prItems.length) continue;
 
-      // Group by ItemCode
-      const itemGroups = _.groupBy(prItems, (v: any) =>
-        (v.ItemCode || 'Unknown Item').trim()
+      const itemGroups = _.groupBy(prItems, i =>
+        (i.ItemCode || 'Unknown').trim()
       );
 
       const parentStart = startIndex;
+      let parentCount = 0;
       const children: any[] = [];
-      let parentItemCount = 0;
 
-      Object.keys(itemGroups).forEach((itemCode) => {
+      Object.keys(itemGroups).forEach(itemCode => {
         const items = itemGroups[itemCode];
 
-        // Sort by price (LOWEST first)
-        const sortedItems = [...items].sort(
-          (a, b) => Number(a.Price) - Number(b.Price)
+        const accepted = items.filter(
+          i => i.InitiatorStatus === 'Technically Accepted'
         );
 
-        // child group's startIndex must point to where its items will be inserted
-        const childStart = startIndex;
+        const rejected = items.filter(
+          i => i.InitiatorStatus === 'Technically Not Accepted'
+        );
 
-        // push child group (level 1)
+        // Sort only accepted
+        accepted.sort((a, b) => Number(a.Price) - Number(b.Price));
+
+        accepted.forEach((item, idx) => {
+          item.priceRank = idx;
+        });
+
+        rejected.forEach(item => {
+          item.priceRank = null;
+        });
+
+        const finalItems = [...accepted, ...rejected];
+
         children.push({
           key: `pr-${pr.ID}-item-${itemCode}`,
           name: itemCode,
-          startIndex: childStart,
-          count: sortedItems.length,
+          startIndex,
+          count: finalItems.length,
           level: 1,
           isCollapsed: false
         });
 
-        // push actual item rows into combinedItems
-        sortedItems.forEach((item, idx) => {
-          combinedItems.push({
-            ...item,
-            priceRank: idx // 0 = lowest, 1 = second, 2+ = third
-          });
-        });
+        finalItems.forEach(item => combinedItems.push(item));
 
-        // advance startIndex and parent counters
-        startIndex += sortedItems.length;
-        parentItemCount += sortedItems.length;
+        startIndex += finalItems.length;
+        parentCount += finalItems.length;
       });
 
-      // parent group (level 0) — children array so expanding PR shows only ItemCode headers
       groups.push({
         key: `pr-${pr.ID}`,
-        name: `${pr.PRNumber}`,
+        name: pr.PRNumber,
         startIndex: parentStart,
-        // count must equal total number of items under this PR (sum of child counts)
-        count: parentItemCount,
+        count: parentCount,
         level: 0,
         isCollapsed: false,
         children
       });
     }
 
-    // ensure groups ordered by startIndex
-    groups.sort((a: any, b: any) => a.startIndex - b.startIndex);
-
     this.setState({ listItems: combinedItems, groups });
   }
-  // ...existing code...
 
-  /**
-
-   * Columns - only shown at the detail level
-
-   */
-
+  /* =====================================================
+     COLUMNS
+     ===================================================== */
   private getColumns(): IColumn[] {
-
     return [
-
-
-
+      { key: 'item', name: 'Item Code', fieldName: 'ItemCode', minWidth: 120 },
+      { key: 'desc', name: 'Description', fieldName: 'Description', minWidth: 200 },
+      { key: 'qty', name: 'Qty', fieldName: 'Qty', minWidth: 60 },
+      { key: 'uom', name: 'UoM', fieldName: 'UoM', minWidth: 70 },
+      { key: 'comments', name: 'Comments', fieldName: 'Comments', minWidth: 150 },
       {
-
-        key: 'itemcode',
-
-        name: 'Item Code',
-
-        fieldName: 'ItemCode',
-
-        minWidth: 100,
-
-        onRender: (item: any) => {
-
-          if (item.isPlaceholder) return null;
-
-          return <span>{item.ItemCode}</span>;
-
-        }
-
-      },
-
-      {
-
-        key: 'description',
-
-        name: 'Description',
-
-        fieldName: 'Description',
-
-        minWidth: 200,
-
-        onRender: (item: any) => {
-
-          if (item.isPlaceholder) return null;
-
-          return <span>{item.Description}</span>;
-
-        }
-
-      },
-
-      {
-
-        key: 'qty',
-
-        name: 'Qty',
-
-        fieldName: 'Qty',
-
-        minWidth: 60,
-
-        onRender: (item: any) => {
-
-          if (item.isPlaceholder) return null;
-
-          return <span>{item.Qty}</span>;
-
-        }
-
-      },
-
-      {
-
-        key: 'uom',
-
-        name: 'UoM',
-
-        fieldName: 'UoM',
-
-        minWidth: 60,
-
-        onRender: (item: any) => {
-
-          if (item.isPlaceholder) return null;
-
-          return <span>{item.UoM}</span>;
-
-        }
-
-      },
-
-      {
-
-        key: 'comments',
-
-        name: 'Comments',
-
-        fieldName: 'Comments',
-
-        minWidth: 150,
-
-        onRender: (item: any) => {
-
-          if (item.isPlaceholder) return null;
-
-          return <span>{item.Comments}</span>;
-
-        }
-
-      },
-
-      {
-
         key: 'price',
-
         name: 'Price',
-
         fieldName: 'Price',
-
         minWidth: 100,
-
         onRender: (item: any) => {
+          // ❌ Rejected → Always red
+          if (item.InitiatorStatus === 'Technically Not Accepted') {
+            return <span style={{ color: '#a80000', fontWeight: 600 }}>{item.Price}</span>;
+          }
 
-          if (item.isPlaceholder) return null;
+          // ✅ Accepted → Rank based
+          let color = '#a80000';
+          if (item.priceRank === 0) color = '#107c10';
+          else if (item.priceRank === 1) color = '#ffb900';
+          else {
 
-          let color = '#323130';
-
-          if (item.priceRank === 0) {
-
-            color = '#107c10'; // 🟢 Lowest
-
-          } else if (item.priceRank === 1) {
-
-            color = '#ffb900'; // 🟡 Second
-
-          } else {
-
-            color = '#a80000'; // 🔴 Third & above
+            color = '#ff8c00'; // 🔴 Third & above
 
           }
 
-          return (
-            <span style={{ color, fontWeight: 600 }}>
-
-              {item.Price}
-            </span>
-
-          );
-
+          return <span style={{ color, fontWeight: 600 }}>{item.Price}</span>;
         }
-
       },
+      { key: 'vendor', name: 'Vendor', fieldName: 'Vendor', minWidth: 160 },
       {
-
-        key: 'vendor',
-
-        name: 'Vendor',
-
-        fieldName: 'Vendor',
-
-        minWidth: 150,
-
-        onRender: (item: any) => {
-
-          // Hide placeholder rows
-
-          if (item.isPlaceholder) return null;
-
-          return <span>{item.Vendor}</span>;
-
-        }
-
-      },
-      {
-        key: 'initiatorStatus',
+        key: 'status',
         name: 'Status',
         fieldName: 'InitiatorStatus',
-        minWidth: 170,
-        onRender: (item: any) => {
-          if (item.isPlaceholder) return null;
-
-          const isRejected =
-            item.InitiatorStatus === 'Technically Not Accepted';
-
-          return (
-            <span
-              style={{
-                color: isRejected ? '#a80000' : '#323130',
-                fontWeight: isRejected ? 600 : 400
-              }}
-            >
-              {item.InitiatorStatus}
-            </span>
-          );
-        }
+        minWidth: 180,
+        onRender: (item: any) => (
+          <span
+            style={{
+              color:
+                item.InitiatorStatus === 'Technically Not Accepted'
+                  ? '#a80000'
+                  : '#323130',
+              fontWeight:
+                item.InitiatorStatus === 'Technically Not Accepted' ? 600 : 400
+            }}
+          >
+            {item.InitiatorStatus}
+          </span>
+        )
       }
-
-
-
     ];
-
   }
 
-  private onRenderRow = (props?: IDetailsRowProps): JSX.Element | null => {
-    if (!props) return null;
 
-    const { itemIndex, group } = props;
-
-    // Reset zebra inside each ItemCode group
-    const relativeIndex =
-      group && group.level === 1
-        ? itemIndex - group.startIndex
-        : itemIndex;
-
-    const isEvenRow = relativeIndex % 2 === 0;
-
-    const backgroundColor = isEvenRow
-      ? '#ffffff'   // white
-      : '#f4f4f4';  // light ash
-
-    return (
-      <DetailsRow
-        {...props}
-        styles={{
-          root: {
-            backgroundColor,
-            selectors: {
-              ':hover': {
-                backgroundColor: '#eaeaea'
-              }
-            }
-          }
-        }}
-      />
-    );
-  };
   private renderPriceLegend(): JSX.Element {
     const legendItem = (color: string, text: string) => (
       <div
@@ -453,7 +231,7 @@ export default class QatarCementDashboard extends React.Component<
             backgroundColor: color,
             display: 'inline-block',
             marginRight: 8,
-            borderRadius: 2
+            borderRadius: 3
           }}
         />
         <span style={{ fontSize: 13 }}>{text}</span>
@@ -471,103 +249,97 @@ export default class QatarCementDashboard extends React.Component<
           borderRadius: 4
         }}
       >
-        {legendItem('#107c10', 'Lowest bid')}
-        {legendItem('#ffb900', 'Second best bid')}
-        {legendItem('#a80000', 'Third best bids')}
+        {legendItem('#107c10', 'Lowest Accepted Price')}
+        {legendItem('#ffb900', 'Second Best Accepted Price')}
+        {legendItem('#ff8c00', 'Third Best Price ')}
       </div>
     );
   }
 
-  private exportToExcel = (): void => {
-    const items = this.state.listItems || [];
 
-    if (!items.length) return;
+  /* =====================================================
+     ROW STYLING
+     ===================================================== */
+  private onRenderRow = (props?: IDetailsRowProps): JSX.Element | null => {
+    if (!props) return null;
 
-    // Prepare data for Excel
-    const excelData = items.map((item: any) => ({
-      'Item Code': item.ItemCode,
-      'Description': item.Description,
-      'Qty': item.Qty,
-      'UoM': item.UoM,
-      'Comments': item.Comments,
-      'Price': item.Price,
-      'Vendor': item.Vendor,
-      'Status': item.InitiatorStatus
-    }));
-
-    // Create worksheet
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-
-    // Create workbook
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dashboard');
-
-    // Export file
-    XLSX.writeFile(workbook, 'QatarCementDashboard.xlsx');
-  };
-
-
-
-  public render(): React.ReactElement<IQatarCementDashboardProps> {
+    const { itemIndex, group } = props;
+    const relativeIndex =
+      group && group.level === 1 ? itemIndex - group.startIndex : itemIndex;
 
     return (
-
-      <section className={styles.container}>
-        <div className={styles.formpopup}>
-          <div className={styles.formheader}>
-            <div className={styles.formtitle}>{this.props.wpproperties.webpartTitle}</div>
-          </div>
-          <div className={styles.formbody}>
-
-
-            <div style={{ marginBottom: 10, textAlign: 'right' }}>
-              <button
-                onClick={this.exportToExcel}
-                style={{
-                  padding: '6px 14px',
-                  backgroundColor: '#107c10',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: 'pointer'
-                }}
-              >
-                Export to Excel
-              </button>
-            </div>
-
-
-            <DetailsList
-
-              items={this.state.listItems || []}
-
-              columns={this.getColumns()}
-
-              layoutMode={DetailsListLayoutMode.justified}
-
-              selectionMode={SelectionMode.none}
-
-              groups={this.state.groups}
-              groupProps={{
-                showEmptyGroups: false
-              }}
-
-              onRenderRow={this.onRenderRow}   // ✅ ADD THIS LINE
-            />
-            {this.renderPriceLegend()}   {/* ✅ PRICE LEGEND */}
-
-            <ModalOverlay
-
-              isModalOpen={this.state.modalOverlay.isOpen}
-
-              modalText={this.state.modalOverlay.Text}
-
-            />
-          </div>
-        </div>
-      </section>
-
+      <DetailsRow
+        {...props}
+        styles={{
+          root: {
+            backgroundColor: relativeIndex % 2 === 0 ? '#ffffff' : '#f4f4f4',
+            selectors: {
+              ':hover': { backgroundColor: '#eaeaea' }
+            }
+          }
+        }}
+      />
     );
+  };
 
+  /* =====================================================
+     EXPORT
+     ===================================================== */
+  private exportToExcel = (): void => {
+    const data = (this.state.listItems || []).map(i => ({
+      'Item Code': i.ItemCode,
+      Description: i.Description,
+      Qty: i.Qty,
+      UoM: i.UoM,
+      Comments: i.Comments,
+      Price: i.Price,
+      Vendor: i.Vendor,
+      Status: i.InitiatorStatus
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dashboard');
+    XLSX.writeFile(wb, 'QatarCementDashboard.xlsx');
+  };
+
+  /* =====================================================
+     RENDER
+     ===================================================== */
+  public render(): React.ReactElement<IQatarCementDashboardProps> {
+    return (
+      <section className={styles.container}>
+        <div style={{ textAlign: 'right', marginBottom: 10 }}>
+          <button
+            onClick={this.exportToExcel}
+            style={{
+              padding: '6px 14px',
+              backgroundColor: '#107c10',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer'
+            }}
+          >
+            Export to Excel
+          </button>
+        </div>
+
+        <DetailsList
+          items={this.state.listItems || []}
+          columns={this.getColumns()}
+          layoutMode={DetailsListLayoutMode.justified}
+          selectionMode={SelectionMode.none}
+          groups={this.state.groups}
+          onRenderRow={this.onRenderRow}
+        />
+        {this.renderPriceLegend()}
+
+        <ModalOverlay
+          isModalOpen={this.state.modalOverlay.isOpen}
+          modalText={this.state.modalOverlay.Text}
+        />
+      </section>
+    );
   }
 }
