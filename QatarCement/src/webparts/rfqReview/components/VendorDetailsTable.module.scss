@@ -220,8 +220,7 @@
 
 // Zebra striping for better readability
 .table tbody tr:nth-child(even) td {
-  background-color: rgba(0, 0, 0, 0.2);
-  /* 0.5 = 50% opacity; adjust as needed (0 = fully transparent, 1 = fully opaque) */
+  background-color: #f4f4f4;
 } 
 
 

@@ -13,6 +13,7 @@ import VendorDetailsTable from './VendorDetailsTable';
 import InitiatorDetailsTable from './InitiatorDetailsTable';
 import ManagerDetailsTable from './ManagerDetailsTable';
 import ProcurementManagerDetailsTable from './ProcurementManagerDetailsTable';
+import InitiatorDetailsTableForm from './InitiatorDetailsTableForm';
 
 
 export default class RfqReview extends React.Component<IRfqReviewProps, IRfqReviewState, {}> {
@@ -83,6 +84,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
     this.bindMasterDataForManager = this.bindMasterDataForManager.bind(this);
     this.bindMasterDataForProcurementManager = this.bindMasterDataForProcurementManager.bind(this);
 
+
   }
   public async componentDidMount(): Promise<void> {
     const user = await this.service.getCurrentUser();
@@ -112,6 +114,12 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         } else {
           ToastService.error("Task ID is required for Initiator view.");
         }
+      }
+      // 👉 NEW CASE: MID + User=InitiatorForm (no TID required)
+      else if (userParam && userParam.toLowerCase() === 'initiatorform') {
+        this.setState({ userType: "InitiatorForm" });
+        await this.bindMasterDataForInitiator(masterid);
+
       }
       // 👉 CASE 2: MID + TID + User=MaintenanceManager
       else if (userParam && userParam.toLowerCase() === 'maintenancemanager') {
@@ -475,7 +483,6 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       ToastService.error("Failed to fetch data. Please try again later.");
     }
   }
-
   public async bindManagerData(masterid: string, taskid: string) {
     try {
       // 1. Check group membership first (extra security layer)
@@ -1538,6 +1545,17 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 onCancel={this.closeWindow}  // ✅
               />
             )}
+
+            {/* Initiator Form*/}
+            {this.state.userType === "InitiatorForm" && (
+              <InitiatorDetailsTableForm
+                itemDetails={this.state.itemDetails}
+                masterid={this.state.masterid}
+                taskID={this.state.taskID}
+
+              />
+            )}
+
             {/* Manager View */}
             {this.state.userType === "MaintenanceManager" && (
               <ManagerDetailsTable
