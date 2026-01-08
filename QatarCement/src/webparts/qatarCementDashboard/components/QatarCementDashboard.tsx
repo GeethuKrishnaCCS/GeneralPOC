@@ -9,6 +9,8 @@ import type {
   IQatarCementDashboardState
 
 } from '../interfaces/IQatarCementDashboardProps';
+import * as XLSX from 'xlsx';
+
 
 import { QatarCementDashboardService } from '../services/QatarCementDashboardService';
 
@@ -22,7 +24,9 @@ import {
 
   SelectionMode,
 
-  IColumn
+  IColumn,
+  DetailsRow,
+  IDetailsRowProps
 
 } from '@fluentui/react/lib/DetailsList';
 
@@ -113,7 +117,7 @@ export default class QatarCementDashboard extends React.Component<
 
     const workflowItemsRaw = await this.service.getSelectExpand(
       `${webUrl}/Lists/${workflowListName}`,
-      'ID,Vendor,ItemCode,Description,Qty,UoM,Comments,Price,PRDetailID',
+      'ID,Vendor,ItemCode,Description,Qty,UoM,Comments,Price,PRDetailID,InitiatorStatus',
       ''
     );
 
@@ -160,7 +164,7 @@ export default class QatarCementDashboard extends React.Component<
           startIndex: childStart,
           count: sortedItems.length,
           level: 1,
-          isCollapsed: true
+          isCollapsed: false
         });
 
         // push actual item rows into combinedItems
@@ -184,7 +188,7 @@ export default class QatarCementDashboard extends React.Component<
         // count must equal total number of items under this PR (sum of child counts)
         count: parentItemCount,
         level: 0,
-        isCollapsed: true,
+        isCollapsed: false,
         children
       });
     }
@@ -370,11 +374,139 @@ export default class QatarCementDashboard extends React.Component<
         }
 
       },
+      {
+        key: 'initiatorStatus',
+        name: 'Status',
+        fieldName: 'InitiatorStatus',
+        minWidth: 170,
+        onRender: (item: any) => {
+          if (item.isPlaceholder) return null;
+
+          const isRejected =
+            item.InitiatorStatus === 'Technically Not Accepted';
+
+          return (
+            <span
+              style={{
+                color: isRejected ? '#a80000' : '#323130',
+                fontWeight: isRejected ? 600 : 400
+              }}
+            >
+              {item.InitiatorStatus}
+            </span>
+          );
+        }
+      }
+
 
 
     ];
 
   }
+
+  private onRenderRow = (props?: IDetailsRowProps): JSX.Element | null => {
+    if (!props) return null;
+
+    const { itemIndex, group } = props;
+
+    // Reset zebra inside each ItemCode group
+    const relativeIndex =
+      group && group.level === 1
+        ? itemIndex - group.startIndex
+        : itemIndex;
+
+    const isEvenRow = relativeIndex % 2 === 0;
+
+    const backgroundColor = isEvenRow
+      ? '#ffffff'   // white
+      : '#f4f4f4';  // light ash
+
+    return (
+      <DetailsRow
+        {...props}
+        styles={{
+          root: {
+            backgroundColor,
+            selectors: {
+              ':hover': {
+                backgroundColor: '#eaeaea'
+              }
+            }
+          }
+        }}
+      />
+    );
+  };
+  private renderPriceLegend(): JSX.Element {
+    const legendItem = (color: string, text: string) => (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          marginRight: 24
+        }}
+      >
+        <span
+          style={{
+            width: 14,
+            height: 14,
+            backgroundColor: color,
+            display: 'inline-block',
+            marginRight: 8,
+            borderRadius: 2
+          }}
+        />
+        <span style={{ fontSize: 13 }}>{text}</span>
+      </div>
+    );
+
+    return (
+      <div
+        style={{
+          display: 'flex',
+          marginTop: 12,
+          padding: '8px 12px',
+          background: '#faf9f8',
+          border: '1px solid #edebe9',
+          borderRadius: 4
+        }}
+      >
+        {legendItem('#107c10', 'Lowest bid')}
+        {legendItem('#ffb900', 'Second best bid')}
+        {legendItem('#a80000', 'Third best bids')}
+      </div>
+    );
+  }
+
+  private exportToExcel = (): void => {
+    const items = this.state.listItems || [];
+
+    if (!items.length) return;
+
+    // Prepare data for Excel
+    const excelData = items.map((item: any) => ({
+      'Item Code': item.ItemCode,
+      'Description': item.Description,
+      'Qty': item.Qty,
+      'UoM': item.UoM,
+      'Comments': item.Comments,
+      'Price': item.Price,
+      'Vendor': item.Vendor,
+      'Status': item.InitiatorStatus
+    }));
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dashboard');
+
+    // Export file
+    XLSX.writeFile(workbook, 'QatarCementDashboard.xlsx');
+  };
+
+
 
   public render(): React.ReactElement<IQatarCementDashboardProps> {
 
@@ -386,42 +518,56 @@ export default class QatarCementDashboard extends React.Component<
             <div className={styles.formtitle}>{this.props.wpproperties.webpartTitle}</div>
           </div>
           <div className={styles.formbody}>
+
+
+            <div style={{ marginBottom: 10, textAlign: 'right' }}>
+              <button
+                onClick={this.exportToExcel}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: '#107c10',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer'
+                }}
+              >
+                Export to Excel
+              </button>
+            </div>
+
+
+            <DetailsList
+
+              items={this.state.listItems || []}
+
+              columns={this.getColumns()}
+
+              layoutMode={DetailsListLayoutMode.justified}
+
+              selectionMode={SelectionMode.none}
+
+              groups={this.state.groups}
+              groupProps={{
+                showEmptyGroups: false
+              }}
+
+              onRenderRow={this.onRenderRow}   // ✅ ADD THIS LINE
+            />
+            {this.renderPriceLegend()}   {/* ✅ PRICE LEGEND */}
+
+            <ModalOverlay
+
+              isModalOpen={this.state.modalOverlay.isOpen}
+
+              modalText={this.state.modalOverlay.Text}
+
+            />
           </div>
         </div>
-
-        <DetailsList
-
-          items={this.state.listItems || []}
-
-          columns={this.getColumns()}
-
-          layoutMode={DetailsListLayoutMode.justified}
-
-          selectionMode={SelectionMode.none}
-
-          groups={this.state.groups}
-
-          groupProps={{
-
-            showEmptyGroups: false,
-
-            isAllGroupsCollapsed: true
-
-          }}
-
-        />
-
-        <ModalOverlay
-
-          isModalOpen={this.state.modalOverlay.isOpen}
-
-          modalText={this.state.modalOverlay.Text}
-
-        />
       </section>
 
     );
 
   }
-
 }
