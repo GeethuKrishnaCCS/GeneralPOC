@@ -106,26 +106,21 @@ export default class QatarCementDashboard extends React.Component<
       Object.keys(itemGroups).forEach(itemCode => {
         const items = itemGroups[itemCode];
 
+        // ✅ ONLY Technically Accepted items
         const accepted = items.filter(
           i => i.InitiatorStatus === 'Technically Accepted'
         );
 
-        const rejected = items.filter(
-          i => i.InitiatorStatus === 'Technically Not Accepted'
-        );
-
-        // Sort only accepted
+        // Sort accepted by price
         accepted.sort((a, b) => Number(a.Price) - Number(b.Price));
 
+        // Assign price rank
         accepted.forEach((item, idx) => {
           item.priceRank = idx;
         });
 
-        rejected.forEach(item => {
-          item.priceRank = null;
-        });
-
-        const finalItems = [...accepted, ...rejected];
+        // ❌ Do NOT include rejected at all
+        const finalItems = accepted;
 
         children.push({
           key: `pr-${pr.ID}-item-${itemCode}`,
