@@ -111,6 +111,10 @@ export default class QatarCementDashboard extends React.Component<
           i => i.InitiatorStatus === 'Technically Accepted'
         );
 
+        // ✅ SKIP empty ItemCode groups
+        if (!accepted.length) {
+          return;
+        }
         // Sort accepted by price
         accepted.sort((a, b) => Number(a.Price) - Number(b.Price));
 
