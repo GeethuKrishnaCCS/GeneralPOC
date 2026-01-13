@@ -19,7 +19,7 @@ interface IRFQDeptDetailsTableProps {
     selectedFiles: File[];
     onFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onRemoveFile: (index: number) => void;
-}
+} 
 
 const RFQDeptDetailsTable: React.FC<IRFQDeptDetailsTableProps> = ({
     itemDetails,
