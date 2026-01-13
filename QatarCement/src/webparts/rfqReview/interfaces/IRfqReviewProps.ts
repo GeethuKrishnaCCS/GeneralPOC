@@ -85,6 +85,10 @@ export interface IRfqReviewState {
   commonManagerComments: string;
   commonProcurementStatus: string;
   commonProcurementComments: string;
+  workflowDetailsAttachments?: Record<number, Array<{ name: string; url: string }>>;
+  vendorTermsAndConditions: string;
+  vendorTechnicalSupport: string;
+  vendorWarrantySupport: string;
 }
 
 export interface IItemData {

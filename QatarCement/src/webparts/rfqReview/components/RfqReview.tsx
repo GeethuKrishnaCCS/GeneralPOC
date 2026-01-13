@@ -49,6 +49,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       commonManagerComments: '',
       commonProcurementStatus: '',
       commonProcurementComments: '',
+      workflowDetailsAttachments: {},
+      vendorTermsAndConditions: '',
+      vendorTechnicalSupport: '',
+      vendorWarrantySupport: '',
     };
 
     this.service = new RfqReviewService(this.props.context, this.props.context.pageContext.web.absoluteUrl);
@@ -473,14 +477,44 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         dueDate: masterdata.DueDate,
         prInitiator: masterdata.PRInitiator.Title,
         businessJustification: masterdata.BusinessJustification,
+        vendorTermsAndConditions: masterdata.TermsAndConditions || '',
+        vendorTechnicalSupport: masterdata.TechnicalSupport || '',
+        vendorWarrantySupport: masterdata.WarrantySupport || '',
         modalOverlay: { isOpen: false, Text: '' },
         itemDetails: itemdetaildataitems
       });
+      // Fetch attachments for initiator view (add after setState in bindMasterDataForInitiator)
+      if (this.state.userType === "Initiator" || this.state.userType === "InitiatorForm") {
+        await this.fetchWorkflowDetailsAttachments();
+      }
 
     } catch (error) {
       console.error("Error fetching initiator data:", error);
       this.setState({ modalOverlay: { isOpen: true, Text: 'Error Loading Data' } });
       ToastService.error("Failed to fetch data. Please try again later.");
+    }
+  }
+
+  // Add this new method to RfqReview class
+  public async fetchWorkflowDetailsAttachments() {
+    try {
+      const attachmentsMap: Record<number, Array<{ name: string; url: string }>> = {};
+
+      // Fetch attachments for each item
+      for (const item of this.state.itemDetails) {
+        if (item.WorkflowDetailsId) {
+          const attachments = await this.service.getWorkflowDetailsAttachments(item.WorkflowDetailsId);
+          if (attachments.length > 0) {
+            attachmentsMap[item.WorkflowDetailsId] = attachments;
+          }
+        }
+      }
+
+      this.setState({ workflowDetailsAttachments: attachmentsMap });
+      console.log("WorkflowDetails attachments fetched:", attachmentsMap);
+
+    } catch (error) {
+      console.error("Error fetching WorkflowDetails attachments:", error);
     }
   }
   public async bindManagerData(masterid: string, taskid: string) {
@@ -606,8 +640,14 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         prInitiator: masterdata.PRInitiator.Title,
         businessJustification: masterdata.BusinessJustification,
         modalOverlay: { isOpen: false, Text: '' },
+        vendorTermsAndConditions: masterdata.TermsAndConditions || '',
+        vendorTechnicalSupport: masterdata.TechnicalSupport || '',
+        vendorWarrantySupport: masterdata.WarrantySupport || '',
         itemDetails: itemdetaildataitems
       });
+      if (this.state.userType === "MaintenanceManager") {
+        await this.fetchWorkflowDetailsAttachments();
+      }
 
     } catch (error) {
       console.error("Error fetching manager data:", error);
@@ -683,15 +723,15 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       masterdata = await this.service.getItemsByIdSelectExpand(masterqueryurl, Number(masterid), select, expand);
       console.log("masterdata", masterdata);
 
-      // Fetch WorkflowDetails where ManagerStatus = 'Approved'
+      // Fetch WorkflowDetails where ManagerStatus = 'Approve'
       const workflowDetailsQuery = this.props.context.pageContext.web.serverRelativeUrl +
         strings.queryList + "WorkflowDetails";
-      const workflowFilter = `PRDetailID eq ${masterid} and MaintenanceManagerStatus eq 'Approved'`;
+      const workflowFilter = `PRDetailID eq ${masterid} and MaintenanceManagerStatus eq 'Approve'`;
 
       const workflowDetailsData = await this.service.getItemsFilter(workflowDetailsQuery, workflowFilter);
       console.log("Procurement Manager WorkflowDetails:", workflowDetailsData);
 
-      // 🚨 CRITICAL VALIDATION: No approved items found
+      // 🚨 CRITICAL VALIDATION: No approve items found
       if (!workflowDetailsData || workflowDetailsData.length === 0) {
         this.setState({
           modalOverlay: { isOpen: true, Text: 'No Items for Review' }
@@ -749,6 +789,9 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         modalOverlay: { isOpen: false, Text: '' },
         itemDetails: itemdetaildataitems
       });
+      if (this.state.userType === "ProcurementManager") {
+        await this.fetchWorkflowDetailsAttachments();
+      }
 
     } catch (error) {
       console.error("Error fetching procurement manager data:", error);
@@ -814,7 +857,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
       }
 
       console.log("Files uploaded successfully:", uploadedUrls);
-      ToastService.success(`${selectedFiles.length} file(s) uploaded successfully`);
+      // ToastService.success(`${selectedFiles.length} file(s) uploaded successfully`);
 
       return uploadedUrls;
     } catch (error) {
@@ -891,7 +934,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         console.log("Response from Flow:", responseJSON);
         ToastService.success("RFQ Submitted successfully.");
         this.setState({ modalOverlay: { isOpen: false, Text: '' } });
-        setTimeout(() => this.closeWindow(), 2000);
+        // setTimeout(() => this.closeWindow(), 2000);
+        setTimeout(() => {
+          window.location.replace(this.props.context.pageContext.web.serverRelativeUrl);
+        }, 5000);
       }
       else {
         ToastService.error("Failed to submit review. Please try again.");
@@ -1013,7 +1059,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
             attachmentCount = itemFiles.length;
 
             console.log(`✅ Successfully attached ${itemFiles.length} files to WorkflowDetails ID ${item.WorkflowDetailsId}`);
-            ToastService.success(`${itemFiles.length} file(s) attached for item ${item.ItemCode}`);
+            // ToastService.success(`${itemFiles.length} file(s) attached for item ${item.ItemCode}`);
 
           } catch (error) {
             console.error(`❌ Error uploading files for item ${item.Id}:`, error);
@@ -1067,7 +1113,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
           vendorResponses: {},
           modalOverlay: { isOpen: false, Text: '' }
         });
-        setTimeout(() => this.closeWindow(), 2000);
+        // setTimeout(() => this.closeWindow(), 2000);
+        setTimeout(() => {
+          window.location.replace(this.props.context.pageContext.web.serverRelativeUrl);
+        }, 5000);
       }
       else {
         ToastService.error("Failed to submit vendor response. Please try again.");
@@ -1162,7 +1211,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         console.log("Response from Flow:", responseJSON);
         ToastService.success("Initiator Review Submitted successfully.");
         this.setState({ modalOverlay: { isOpen: false, Text: '' } });
-        setTimeout(() => this.closeWindow(), 2000);
+        // setTimeout(() => this.closeWindow(), 2000);
+        setTimeout(() => {
+          window.location.replace(this.props.context.pageContext.web.serverRelativeUrl);
+        }, 5000);
       }
       else {
         ToastService.error("Failed to submit initiator review. Please try again.");
@@ -1286,7 +1338,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
         console.log("Response from Flow:", responseJSON);
         ToastService.success("Maintenance Manager Submitted successfully.");
         this.setState({ modalOverlay: { isOpen: false, Text: '' } });
-        setTimeout(() => this.closeWindow(), 2000);
+        // setTimeout(() => this.closeWindow(), 2000);
+        setTimeout(() => {
+          window.location.replace(this.props.context.pageContext.web.serverRelativeUrl);
+        }, 5000);
       } else {
         ToastService.error("Failed to submit maintenance manager review. Please try again.");
       }
@@ -1539,10 +1594,14 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 itemDetails={this.state.itemDetails}
                 masterid={this.state.masterid}
                 taskID={this.state.taskID}
-                initiatorResponses={this.state.initiatorResponses}  // ✅
-                onResponseChange={this.handleInitiatorResponseChange}  // ✅
-                onSubmitInitiator={this.submitInitiator}  // ✅
-                onCancel={this.closeWindow}  // ✅
+                initiatorResponses={this.state.initiatorResponses}
+                workflowDetailsAttachments={this.state.workflowDetailsAttachments || {}}  // ✅ Add this
+                vendorTermsAndConditions={this.state.vendorTermsAndConditions}
+                vendorTechnicalSupport={this.state.vendorTechnicalSupport}
+                vendorWarrantySupport={this.state.vendorWarrantySupport}
+                onResponseChange={this.handleInitiatorResponseChange}
+                onSubmitInitiator={this.submitInitiator}
+                onCancel={this.closeWindow}
               />
             )}
 
@@ -1552,6 +1611,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 itemDetails={this.state.itemDetails}
                 masterid={this.state.masterid}
                 taskID={this.state.taskID}
+                vendorTermsAndConditions={this.state.vendorTermsAndConditions}
+                vendorTechnicalSupport={this.state.vendorTechnicalSupport}
+                vendorWarrantySupport={this.state.vendorWarrantySupport}
+                workflowDetailsAttachments={this.state.workflowDetailsAttachments || {}}  // ✅ Add this
 
               />
             )}
@@ -1570,6 +1633,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 onCommonCommentsChange={this.handleCommonManagerCommentsChange}
                 onSubmitManager={this.submitMaintenanceManager}
                 onCancel={this.closeWindow}
+                workflowDetailsAttachments={this.state.workflowDetailsAttachments || {}}
+                vendorTermsAndConditions={this.state.vendorTermsAndConditions}
+                vendorTechnicalSupport={this.state.vendorTechnicalSupport}
+                vendorWarrantySupport={this.state.vendorWarrantySupport}
               />
             )}
 
@@ -1587,6 +1654,10 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
                 onCommonCommentsChange={this.handleCommonProcurementCommentsChange}
                 onSubmitProcurementManager={this.submitProcurementManager}
                 onCancel={this.closeWindow}
+                workflowDetailsAttachments={this.state.workflowDetailsAttachments || {}}  // ✅ Add this
+                vendorTermsAndConditions={this.state.vendorTermsAndConditions}
+                vendorTechnicalSupport={this.state.vendorTechnicalSupport}
+                vendorWarrantySupport={this.state.vendorWarrantySupport}
               />
             )}
           </div>

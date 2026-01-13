@@ -51,19 +51,44 @@
 
 .col12 {
   flex: 1 1 0%;
+  min-width: 0;
 }
 
 .doctable {
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  display: block;
+  
+  /* Custom scrollbar styling for better visibility */
+  &::-webkit-scrollbar {
+    height: 10px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
 }
 
 .table {
-  width: 100%;
+  min-width: 1500px; /* Force horizontal scroll - total of all column widths */
+  width: max-content;
   border-collapse: collapse;
   table-layout: fixed;
-  /* Ensures borders don't overlap */
+  display: table;
 }
 
 .tr {
@@ -73,13 +98,13 @@
 
 .th {
   border: 1px solid #ccc;
-  /* Adds border between columns */
-  padding: 6px 8px;
-  /* Adds padding for better readability */
+  padding: 10px 8px !important;
   text-align: left;
-  /* Aligns text to the left */
-  overflow: hidden;
-  vertical-align: top ;
+  vertical-align: top;
+  font-size: 13px;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /* Fixed width for columns */
@@ -145,17 +170,33 @@
   word-wrap: break-word;
 }
 
-/* Technical Status (Dropdown) */
+/* Vendor Action */
 .table tr th:nth-child(9),
 .table tr td:nth-child(9) {
+  width: 50px;
+  /* Enough for the dropdown */
+  min-width: 50px;
+}
+
+/* Attachments*/
+.table tr th:nth-child(10),
+.table tr td:nth-child(10) {
+  width: 100px;
+  /* Enough for the dropdown */
+  min-width: 100px;
+}
+
+/* Technical Status (Dropdown) */
+.table tr th:nth-child(11),
+.table tr td:nth-child(11) {
   width: 170px;
   /* Enough for the dropdown */
   min-width: 150px;
 }
 
 /* Technical Comments (TextField) */
-.table tr th:nth-child(10),
-.table tr td:nth-child(10) {
+.table tr th:nth-child(12),
+.table tr td:nth-child(12) {
   width: 200px;
   /* Gives space for multiline comments */
   min-width: 180px;

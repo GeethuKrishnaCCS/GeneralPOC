@@ -1,6 +1,6 @@
 import * as React from 'react';
 import styles from './ManagerDetailsTable.module.scss';
-import { Dropdown, IDropdownOption, PrimaryButton, DefaultButton, TextField } from '@fluentui/react';
+import { Dropdown, IDropdownOption, PrimaryButton, DefaultButton, TextField, Icon, Link, DialogFooter, Dialog, DialogType } from '@fluentui/react';
 
 interface IManagerDetailsTableProps {
     itemDetails: any[];
@@ -9,6 +9,10 @@ interface IManagerDetailsTableProps {
     managerResponses: Record<number, { status?: string; comments?: string }>;
     commonManagerStatus: string;
     commonManagerComments: string;
+    workflowDetailsAttachments: Record<number, Array<{ name: string; url: string }>>;
+    vendorTermsAndConditions: string;
+    vendorTechnicalSupport: string;
+    vendorWarrantySupport: string;
     onResponseChange: (itemId: number, field: 'status' | 'comments', value: string) => void;
     onCommonStatusChange: (value: string) => void;
     onCommonCommentsChange: (value: string) => void;
@@ -21,6 +25,10 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
     managerResponses,
     commonManagerStatus,
     commonManagerComments,
+    workflowDetailsAttachments,
+    vendorTermsAndConditions,
+    vendorTechnicalSupport,
+    vendorWarrantySupport,
     onResponseChange,
     onCommonStatusChange,
     onCommonCommentsChange,
@@ -28,10 +36,65 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
     onCancel
 }) => {
 
+    // State for dialog
+    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+
     const statusOptions: IDropdownOption[] = [
-        { key: 'Approved', text: 'Approved' },
-        { key: 'Rejected', text: 'Rejected' },
+        { key: 'Approve', text: 'Approve' },
+        { key: 'Reject', text: 'Reject' },
     ];
+
+    // Dialog configuration
+        const dialogContentProps = {
+            type: DialogType.normal,
+            // title: 'Vendor Details',
+            closeButtonAriaLabel: 'Close',
+        };
+
+    // Helper function to render attachments
+    const renderAttachments = (workflowDetailsId: number) => {
+        const attachments = workflowDetailsAttachments[workflowDetailsId] || [];
+
+        if (attachments.length === 0) {
+            return <span style={{ color: '#999' }}>No attachments</span>;
+        }
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {attachments.map((attachment, idx) => (
+                    <Link
+                        key={idx}
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            fontSize: '12px',
+                            textDecoration: 'none'
+                        }}
+                    >
+                        <Icon
+                            iconName="Attach"
+                            style={{
+                                marginRight: '5px',
+                                fontSize: '14px',
+                                color: '#0078d4'
+                            }}
+                        />
+                        <span style={{
+                            color: '#0078d4',
+                            textDecoration: 'underline',
+                            wordBreak: 'break-word',
+                            maxWidth: '150px'
+                        }}>
+                            {attachment.name}
+                        </span>
+                    </Link>
+                ))}
+            </div>
+        );
+    };
 
     return (
         <div>
@@ -47,9 +110,10 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                                     <th className={styles.th}>Quantity</th>
                                     <th className={styles.th}>UOM</th>
                                     <th className={styles.th}>Vendor</th>
-                                    <th className={styles.th}>Vendor Status</th>
-                                    <th className={styles.th}>Vendor Price</th>
+                                    <th className={styles.th}>Vendor Status</th>        
                                     <th className={styles.th}>Vendor Comments</th>
+                                    <th className={styles.th}>Vendor Action</th>
+                                    <th className={styles.th}>Attachments</th>
                                     <th className={styles.th}>Initiator Status</th>
                                     <th className={styles.th}>Initiator Comments</th>
                                     <th className={styles.th}>Maintenance Manager Comments</th>
@@ -66,10 +130,44 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                                             <td className={styles.th}>{item.UOM}</td>
                                             <td className={styles.th}>{item.Vendor}</td>
                                             <td className={styles.th}>{item.Status || '-'}</td>
-                                            <td className={styles.th}>{item.Price || '-'}</td>
-                                            <td className={styles.th}>{item.Comments || '-'}</td>
+                                            <td className={styles.th}>
+                                                <div style={{
+                                                    maxWidth: '200px',
+                                                    wordWrap: 'break-word',
+                                                    whiteSpace: 'pre-wrap'
+                                                }}>
+                                                    {item.Comments || '-'}
+                                                </div>
+                                            </td>
+                                            <td className={styles.th}>
+                                                <Icon
+                                                    iconName="CommentSolid"
+                                                    style={{
+                                                        marginRight: '5px',
+                                                        cursor: 'pointer',
+                                                        color: '#0078d4',
+                                                        fontSize: '16px'
+                                                    }}
+                                                    onClick={() => setIsDialogOpen(true)}
+                                                    title="View Vendor Details"
+                                                />
+                                            </td>
+                                            <td className={styles.th}>
+                                                {item.WorkflowDetailsId
+                                                    ? renderAttachments(item.WorkflowDetailsId)
+                                                    : <span style={{ color: '#999' }}>-</span>
+                                                }
+                                            </td>
                                             <td className={styles.th}>{item.InitiatorStatus || '-'}</td>
-                                            <td className={styles.th}>{item.InitiatorComments || '-'}</td>
+                                            <td className={styles.th}>
+                                                <div style={{
+                                                    maxWidth: '200px',
+                                                    wordWrap: 'break-word',
+                                                    whiteSpace: 'pre-wrap'
+                                                }}>
+                                                    {item.InitiatorComments || '-'}
+                                                </div>
+                                            </td>
                                             <td className={styles.th}>
                                                 <TextField
                                                     placeholder="Enter comments"
@@ -79,13 +177,14 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                                                     }}
                                                     multiline
                                                     rows={2}
+                                                    styles={{ root: { minWidth: '200px' } }}
                                                 />
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={12} style={{ textAlign: 'center' }}>
+                                        <td colSpan={13} style={{ textAlign: 'center', padding: '20px' }}>
                                             No items found
                                         </td>
                                     </tr>
@@ -128,6 +227,66 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                 </div>
             </div>
 
+            {/* Vendor Details Dialog */}
+            <Dialog
+                hidden={!isDialogOpen}
+                onDismiss={() => setIsDialogOpen(false)}
+                dialogContentProps={dialogContentProps}
+                minWidth={500}
+                maxWidth={700}
+            >
+                <div style={{ padding: '10px 0' }}>
+                    <div style={{ marginBottom: '15px' }}>
+                        <strong style={{ display: 'block', marginBottom: '5px', color: '#323130' }}>
+                            Terms and Conditions:
+                        </strong>
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#f3f2f1',
+                            borderRadius: '4px',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word'
+                        }}>
+                            {vendorTermsAndConditions || 'Not provided'}
+                        </div>
+                    </div>
+
+                    <div style={{ marginBottom: '15px' }}>
+                        <strong style={{ display: 'block', marginBottom: '5px', color: '#323130' }}>
+                            Technical Support:
+                        </strong>
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#f3f2f1',
+                            borderRadius: '4px',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word'
+                        }}>
+                            {vendorTechnicalSupport || 'Not provided'}
+                        </div>
+                    </div>
+
+                    <div style={{ marginBottom: '15px' }}>
+                        <strong style={{ display: 'block', marginBottom: '5px', color: '#323130' }}>
+                            Warranty Support:
+                        </strong>
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#f3f2f1',
+                            borderRadius: '4px',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word'
+                        }}>
+                            {vendorWarrantySupport || 'Not provided'}
+                        </div>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <DefaultButton onClick={() => setIsDialogOpen(false)} text="Close" />
+                </DialogFooter>
+            </Dialog>
+
             <div className={styles.row}>
                 <div className={styles.col12}>
                     <div className={styles.rgtalign}>
@@ -140,7 +299,6 @@ const ManagerDetailsTable: React.FC<IManagerDetailsTableProps> = ({
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };
