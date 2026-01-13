@@ -1326,7 +1326,7 @@ export default class RfqReview extends React.Component<IRfqReviewProps, IRfqRevi
 
     const response = await this.props.context.httpClient.post(
       postURL,
-      HttpClient.configurations.v1,
+      HttpClient.configurations.v1, 
       postOptions
     );
 
