@@ -180,10 +180,8 @@ export default class QatarCementDashboard extends React.Component<
           let color = '#a80000';
           if (item.priceRank === 0) color = '#107c10';
           else if (item.priceRank === 1) color = '#ffb900';
-          else {
-
-            color = '#ff8c00'; // 🔴 Third & above
-
+          else if (item.isHighest) {
+            color = '#a80000'; // 🔴 Highest ONLY
           }
 
           return <span style={{ color, fontWeight: 600 }}>{item.Price}</span>;
@@ -250,7 +248,7 @@ export default class QatarCementDashboard extends React.Component<
       >
         {legendItem('#107c10', 'Lowest Accepted Price')}
         {legendItem('#ffb900', 'Second Best Accepted Price')}
-        {legendItem('#ff8c00', 'Third Best Price ')}
+        {legendItem('#a80000', 'Highest Price ')}
       </div>
     );
   }
