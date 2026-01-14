@@ -89,7 +89,7 @@ export interface IRfqReviewState {
   vendorTermsAndConditions: string;
   vendorTechnicalSupport: string;
   vendorWarrantySupport: string;
-}
+} 
 
 export interface IItemData {
   index: number;
